@@ -1,11 +1,10 @@
-// Обновлённый script.js — добавлена делегация кликов по карте и дополнительные лог‑сообщения,
-// чтобы клики по миниатюрам всегда попадали в обработчик (устраняет ситуацию когда клики "ничего не делают").
-// Остальная логика сохранена.
+// script.js — патч: явное управление показом модалки и дополнительные логи/fallback
+// Замените текущий script.js этим файлом.
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
 let clues = [];
-let currentIndex = 0; // индекс в массиве clues (0..n-1)
+let currentIndex = 0;
 let savedState = { currentIndex: 0, completed: [] };
 
 const mapImage = document.getElementById('map-image');
@@ -28,69 +27,57 @@ const resetBtn = document.getElementById('reset-progress');
 const cardNext = document.getElementById('card-next');
 
 let hotspotCount = 0;
-let gameIndexes = []; // индексы игровых шагов (без isExtra и без noHotspot)
+let gameIndexes = [];
 let gameTotal = 0;
 
 function showErrorInUI(title, details) {
-  try {
-    if (stepTitle) stepTitle.textContent = title;
-    if (stepText) stepText.innerHTML = `<strong style="color:#b33">${escapeHtml(title)}</strong><div style="color:#666;margin-top:6px;">${escapeHtml(details)}</div>`;
-  } catch (e) {
-    console.error('Не удалось вывести ошибку в UI', e);
-  }
+  if (stepTitle) stepTitle.textContent = title;
+  if (stepText) stepText.innerHTML = `<strong style="color:#b33">${escapeHtml(title)}</strong><div style="color:#666;margin-top:6px;">${escapeHtml(details)}</div>`;
 }
 
 async function loadClues() {
   try {
     stepTitle && (stepTitle.textContent = 'Загрузка...');
     stepText && (stepText.textContent = 'Загружаю подсказки...');
-
     const res = await fetch('data/clues.json', { cache: 'no-store' });
     if (!res.ok) {
       const msg = `HTTP ${res.status} ${res.statusText} при запросе data/clues.json`;
       console.error(msg);
-      showErrorInUI('Ошибка загрузки', msg + '. Проверьте, доступен ли файл data/clues.json.');
+      showErrorInUI('Ошибка загрузки', msg);
       return;
     }
-
     const text = await res.text();
     try {
       clues = JSON.parse(text);
     } catch (parseErr) {
       console.error('Ошибка парсинга data/clues.json:', parseErr);
-      showErrorInUI('Ошибка парсинга JSON', parseErr.message + '. Проверьте валидность data/clues.json (нет комментариев/лишних запятых).');
+      showErrorInUI('Ошибка парсинга JSON', parseErr.message);
       return;
     }
-
     if (!Array.isArray(clues) || clues.length === 0) {
-      showErrorInUI('Неверный формат подсказок', 'data/clues.json пуст или не является массивом.');
+      showErrorInUI('Неверный формат подсказок', 'data/clues.json пуст или не массив');
       return;
     }
-
     console.info('clues загружены, элементов:', clues.length);
 
-    // Восстановление прогресса из localStorage
+    // load saved state
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.completed)) savedState = parsed;
-      } catch (e) {
-        console.warn('Неверный формат savedState в localStorage, сбрасываем', e);
-      }
+      } catch (e) { console.warn('bad savedState', e); }
     }
-
     if (typeof savedState.currentIndex !== 'number') savedState.currentIndex = 0;
 
-    // Формируем список игровых индексов: исключаем isExtra и полностью скрытые noHotspot
+    // build gameIndexes
     gameIndexes = clues.map((c, idx) => ({ c, idx }))
       .filter(x => !x.c.isExtra && !x.c.noHotspot)
       .map(x => x.idx);
-
     gameTotal = gameIndexes.length;
     console.info('Игровых шагов (gameTotal):', gameTotal);
 
-    // Вычисляем стартовый текущий индекс
+    // choose start index
     let startIdx = savedState.currentIndex || 0;
     if (!clues[startIdx] || clues[startIdx].isExtra || clues[startIdx].noHotspot) {
       startIdx = gameIndexes.find(idx => idx >= (savedState.currentIndex || 0)) ?? gameIndexes[0] ?? 0;
@@ -103,7 +90,6 @@ async function loadClues() {
 
     generateHotspotsRandomized();
 
-    // Отобразим счётчики игровых шагов
     totalCounter && (totalCounter.textContent = gameTotal);
     const doneGames = savedState.completed.filter(idx => gameIndexes.includes(idx)).length;
     completedCounter && (completedCounter.textContent = doneGames);
@@ -111,30 +97,27 @@ async function loadClues() {
     renderStep();
     attachUIHandlers();
 
-    // Добавляем делегированный обработчик кликов по карте (на случай наложений и нестандартного DOM)
+    // delegate clicks as robust fallback
     if (mapImage) {
-      // remove previous to avoid double-binding
       mapImage.removeEventListener('click', mapClickHandler);
       mapImage.addEventListener('click', mapClickHandler);
     }
 
   } catch (err) {
-    console.error('Ошибка в loadClues:', err);
-    showErrorInUI('Ошибка при инициализации', err && err.message ? err.message : String(err));
+    console.error('Ошибка в loadClues', err);
+    showErrorInUI('Ошибка инициализации', err && err.message ? err.message : String(err));
   }
 }
 
-function mapClickHandler(e){
+function mapClickHandler(e) {
   try {
-    // ищем ближайшую кнопку .hotspot от целевого элемента
     const btn = e.target.closest && e.target.closest('.hotspot');
     if (!btn) return;
-    // защита: dataset может быть строкой
-    const clickedIndex = Number(btn.getAttribute('data-index'));
-    console.log('mapImage click -> hotspot index', clickedIndex);
-    handleClick(clickedIndex, btn);
+    const idx = Number(btn.getAttribute('data-index'));
+    console.log('mapImage click -> hotspot index', idx);
+    handleClick(idx, btn);
   } catch (err) {
-    console.error('Ошибка в mapClickHandler:', err);
+    console.error('mapClickHandler error', err);
   }
 }
 
@@ -150,72 +133,45 @@ function attachUIHandlers() {
           await levitanAudio.play();
         } catch (e) {
           console.error('Ошибка воспроизведения аудио', e);
-          alert('Не удалось воспроизвести аудио. Откройте консоль (F12) для подробностей.');
+          alert('Не удалось воспроизвести аудио. Откройте консоль для деталей.');
         }
       };
     }
-    if (resetBtn) {
-      resetBtn.onclick = () => {
-        if (!confirm('Сбросить прогресс?')) return;
-        resetProgress();
-      };
-    }
-    if (cardNext) {
-      cardNext.onclick = () => advanceStep();
-    }
+    if (resetBtn) resetBtn.onclick = () => { if (confirm('Сбросить прогресс?')) resetProgress(); };
+    if (cardNext) cardNext.onclick = () => advanceStep();
     if (viewerClose) viewerClose.onclick = closeViewer;
     if (viewerClose2) viewerClose2.onclick = closeViewer;
-    // клавиатура - ESC
     window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeViewer(); });
-  } catch (e) {
-    console.warn('Не удалось навесить некоторые UI обработчики', e);
-  }
+  } catch (e) { console.warn('attachUIHandlers failed', e); }
 }
 
-// Генерация hotspot'ов
 function generateHotspotsRandomized() {
-  try {
-    if (mapImage) {
-      Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove());
-    }
-  } catch (e) {
-    console.warn('mapImage возможно отсутствует в DOM', e);
-  }
-
+  try { if (mapImage) Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove()); } catch(e){console.warn(e);}
   const placed = [];
   const frag = document.createDocumentFragment();
   const tryLimit = 50;
   const minGap = 8;
-
   hotspotCount = 0;
-
   for (let i = 0; i < clues.length; i++) {
     const c = clues[i];
-    if (c.noHotspot) continue; // невидимые
-
+    if (c.noHotspot) continue;
     hotspotCount++;
-
     let leftPct, topPct;
     if (c.left && c.top) {
-      leftPct = parseFloat(String(c.left).replace('%', '')) || (6 + Math.random() * 88);
-      topPct = parseFloat(String(c.top).replace('%', '')) || (8 + Math.random() * 78);
+      leftPct = parseFloat(String(c.left).replace('%','')) || (6 + Math.random()*88);
+      topPct = parseFloat(String(c.top).replace('%','')) || (8 + Math.random()*78);
     } else {
-      let attempts = 0, ok = false;
-      while (attempts < tryLimit && !ok) {
-        leftPct = 6 + Math.random() * 88;
-        topPct = 8 + Math.random() * 78;
+      let attempts = 0, ok=false;
+      while(attempts < tryLimit && !ok){
+        leftPct = 6 + Math.random()*88;
+        topPct = 8 + Math.random()*78;
         ok = true;
-        for (const p of placed) {
-          const dx = Math.abs(p.left - leftPct);
-          const dy = Math.abs(p.top - topPct);
-          if (Math.hypot(dx, dy) < minGap) { ok = false; break; }
-        }
+        for(const p of placed){ if(Math.hypot(Math.abs(p.left-leftPct), Math.abs(p.top-topPct)) < minGap){ ok=false; break; } }
         attempts++;
       }
-      if (!ok) { leftPct = 10 + Math.random() * 80; topPct = 10 + Math.random() * 70; }
+      if(!ok){ leftPct = 10 + Math.random()*80; topPct = 10 + Math.random()*70; }
     }
-    placed.push({ left: leftPct, top: topPct });
-
+    placed.push({ left:leftPct, top: topPct });
     const btn = document.createElement('button');
     btn.className = 'hotspot';
     btn.setAttribute('data-index', i);
@@ -223,50 +179,32 @@ function generateHotspotsRandomized() {
     btn.style.left = `${leftPct.toFixed(2)}%`;
     btn.style.top = `${topPct.toFixed(2)}%`;
     btn.style.zIndex = 5;
-
     const img = document.createElement('img');
     img.src = c.thumb || c.media || c.photo || 'assets/placeholder.jpg';
     img.alt = c.objectName || c.title || `миниатюра ${i+1}`;
-
     btn.appendChild(img);
-
     if (savedState.completed && savedState.completed.includes(i)) btn.classList.add('completed');
-
-    // дополнительно: навесим обработчик на саму кнопке (делегация выше — запасной вариант)
-    btn.addEventListener('click', (ev) => {
-      try {
-        ev.preventDefault();
-        const clickedIndex = Number(btn.getAttribute('data-index'));
-        console.log('hotspot direct click ->', clickedIndex);
-        handleClick(clickedIndex, btn);
-      } catch (e) {
-        console.error('Ошибка в обработчике прямого клика по hotspot', e);
-      }
+    // direct handler (backup)
+    btn.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      const idx = Number(btn.getAttribute('data-index'));
+      console.log('hotspot direct click ->', idx);
+      handleClick(idx, btn);
     });
-
     frag.appendChild(btn);
   }
-
-  try {
-    mapImage && mapImage.appendChild(frag);
-  } catch (e) {
-    console.error('Не удалось добавить hotspots на карту', e);
-    showErrorInUI('Ошибка отображения карты', 'Проверьте, что элемент с id="map-image" присутствует в разметке.');
-  }
+  try { mapImage && mapImage.appendChild(frag); } catch(e){ console.error('append hotspots failed', e); showErrorInUI('Ошибка отображения карты','Проверьте map-image'); }
 }
 
 function renderStep() {
   try {
     const c = clues[currentIndex];
-    stepTitle && (stepTitle.textContent = c ? (c.title || `Шаг ${currentIndex + 1}`) : '—');
+    stepTitle && (stepTitle.textContent = c ? (c.title || `Шаг ${currentIndex+1}`) : '—');
     const clueText = c ? (c.clue || c.text || '') : '';
     stepText && (stepText.innerHTML = `<strong>Подсказка:</strong> ${escapeHtml(clueText)}`);
-
     updatePlayButtonVisibility();
     updateCardNextVisibility(c);
-  } catch (e) {
-    console.error('Ошибка renderStep', e);
-  }
+  } catch (e) { console.error('renderStep error', e); }
 }
 
 function updatePlayButtonVisibility() {
@@ -286,82 +224,102 @@ function handleClick(clickedIndex, btnElement) {
     const current = clues[currentIndex];
     const clicked = clues[clickedIndex];
     if (!clicked) {
-      console.warn('clicked is undefined for index', clickedIndex);
+      console.warn('clicked undefined for index', clickedIndex);
+      alert('Этот экспонат временно недоступен.');
       return;
     }
-
-    viewerImg && (viewerImg.src = clicked.media || clicked.photo || clicked.thumb || 'assets/placeholder-large.jpg');
-    viewerImg && (viewerImg.alt = clicked.objectName || clicked.title || '');
-    viewerTitle && (viewerTitle.textContent = clicked.objectName || clicked.title || `Объект ${clickedIndex + 1}`);
-    viewerDesc && (viewerDesc.textContent = clicked.descr || clicked.objectDesc || clicked.clue || '');
-
+    // fill viewer content
+    if (viewerImg) viewerImg.src = clicked.media || clicked.photo || clicked.thumb || 'assets/placeholder-large.jpg';
+    if (viewerImg) viewerImg.alt = clicked.objectName || clicked.title || '';
+    if (viewerTitle) viewerTitle.textContent = clicked.objectName || clicked.title || `Объект ${clickedIndex+1}`;
+    if (viewerDesc) viewerDesc.textContent = clicked.descr || clicked.objectDesc || clicked.clue || '';
+    // if informational
     if (clicked.isExtra) {
-      viewerResult && (viewerResult.textContent = '');
-      viewerResult && (viewerResult.className = 'viewer-result');
-      viewerNext && viewerNext.classList.add('hidden');
-      viewerNext && (viewerNext.onclick = null);
-      openViewer();
+      if (viewerResult) { viewerResult.textContent = ''; viewerResult.className = 'viewer-result'; }
+      if (viewerNext) { viewerNext.classList.add('hidden'); viewerNext.onclick = null; }
+      // open viewer; if not possible, fallback to alert
+      if (!openViewer()) {
+        alert(`${clicked.objectName || clicked.title}\n\n${clicked.descr || clicked.clue || ''}`);
+      }
       return;
     }
-
+    // normal game item
     if (clickedIndex === currentIndex) {
-      viewerResult && (viewerResult.textContent = 'Правильно', viewerResult.className = 'viewer-result ok');
-      viewerNext && viewerNext.classList.remove('hidden');
-      viewerNext && (viewerNext.onclick = () => {
-        markCompleted(clickedIndex, btnElement);
-        closeViewer();
-        advanceStep();
-      });
+      if (viewerResult) { viewerResult.textContent = 'Правильно'; viewerResult.className = 'viewer-result ok'; }
+      if (viewerNext) {
+        viewerNext.classList.remove('hidden');
+        viewerNext.onclick = () => { markCompleted(clickedIndex, btnElement); closeViewer(); advanceStep(); };
+      }
+      if (!openViewer()) {
+        // fallback
+        alert(`Правильно!\n\n${clicked.objectName || clicked.title}\n\n${clicked.descr || clicked.clue || ''}`);
+      }
     } else {
-      viewerResult && (viewerResult.textContent = 'Неверно', viewerResult.className = 'viewer-result bad');
-      viewerNext && viewerNext.classList.add('hidden');
-      viewerNext && (viewerNext.onclick = null);
+      if (viewerResult) { viewerResult.textContent = 'Неверно'; viewerResult.className = 'viewer-result bad'; }
+      if (viewerNext) { viewerNext.classList.add('hidden'); viewerNext.onclick = null; }
+      if (!openViewer()) {
+        // fallback
+        alert(`Неверно.\n\n${clicked.objectName || clicked.title}\n\n${clicked.descr || clicked.clue || ''}`);
+      }
     }
-
-    openViewer();
   } catch (e) {
-    console.error('Ошибка handleClick', e);
+    console.error('Ошибка в handleClick', e);
   }
 }
 
+// openViewer now returns true if it displayed modal, false if not (so caller can fallback)
 function openViewer() {
-  viewer && viewer.classList.remove('hidden');
-  setTimeout(() => {
-    if (!viewer || viewer.classList.contains('hidden')) return;
+  try {
+    if (!viewer) {
+      console.warn('viewer element not found');
+      return false;
+    }
+    // explicitly set display and remove hidden class to be robust against CSS overrides
     try {
-      if (viewerNext && !viewerNext.classList.contains('hidden')) viewerNext.focus();
-      else viewerClose && viewerClose.focus();
+      viewer.style.display = 'flex';
     } catch (e) { /* ignore */ }
-  }, 60);
+    viewer.classList.remove('hidden');
+    // ensure viewer is on top
+    try { viewer.style.zIndex = 99999; } catch(e){}
+    setTimeout(()=> {
+      if (!viewer || viewer.classList.contains('hidden')) return;
+      try {
+        if (viewerNext && !viewerNext.classList.contains('hidden')) viewerNext.focus();
+        else if (viewerClose) viewerClose.focus();
+      } catch (e) { /* ignore */ }
+    }, 60);
+    return true;
+  } catch (err) {
+    console.error('openViewer failed', err);
+    return false;
+  }
 }
 
 function closeViewer() {
-  viewer && viewer.classList.add('hidden');
+  try {
+    if (!viewer) return;
+    viewer.classList.add('hidden');
+    try { viewer.style.display = 'none'; } catch(e){}
+  } catch (e) { console.error('closeViewer failed', e); }
 }
 
 function markCompleted(index, btnElement) {
   try {
     const btn = btnElement || document.querySelector(`.hotspot[data-index="${index}"]`);
     if (btn) btn.classList.add('completed');
-
     if (gameIndexes.includes(index) && !savedState.completed.includes(index)) {
       savedState.completed.push(index);
     }
-
     const doneGames = savedState.completed.filter(idx => gameIndexes.includes(idx)).length;
     completedCounter && (completedCounter.textContent = doneGames);
-
     saveState();
-
     const allDone = gameIndexes.every(idx => savedState.completed.includes(idx));
     if (allDone) {
       savedState.currentIndex = clues.length - 1;
       saveState();
       window.location.href = 'victory.html';
     }
-  } catch (e) {
-    console.error('Ошибка markCompleted', e);
-  }
+  } catch (e) { console.error('markCompleted failed', e); }
 }
 
 function advanceStep() {
@@ -373,7 +331,6 @@ function advanceStep() {
     renderStep();
     return;
   }
-
   const any = gameIndexes.find(idx => !savedState.completed.includes(idx));
   if (typeof any !== 'undefined') {
     currentIndex = any;
@@ -382,18 +339,13 @@ function advanceStep() {
     renderStep();
     return;
   }
-
   savedState.currentIndex = clues.length - 1;
   saveState();
   window.location.href = 'victory.html';
 }
 
 function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedState));
-  } catch (e) {
-    console.warn('Не удалось сохранить прогресс', e);
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(savedState)); } catch(e){ console.warn('saveState failed', e); }
 }
 
 function resetProgress() {
@@ -407,18 +359,9 @@ function resetProgress() {
 
 function escapeHtml(str) {
   if (!str) return '';
-  return String(str)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 }
 
-// Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-  loadClues().catch(err => {
-    console.error('Unhandled error in loadClues:', err);
-    showErrorInUI('Ошибка инициализации', err && err.message ? err.message : String(err));
-  });
+  loadClues().catch(err => { console.error('Unhandled loadClues error', err); showErrorInUI('Ошибка инициализации', err && err.message ? err.message : String(err)); });
 });
