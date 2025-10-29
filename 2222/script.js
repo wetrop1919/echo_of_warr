@@ -1,5 +1,5 @@
-// Обновлённый script.js (включая поддержку информационных миниатюр isExtra=true)
-// Вставляйте этот файл вместо старого script.js в проект.
+// Обновлённый script.js — ключное изменение: при полном прохождении квеста перенаправление на victory.html
+// (Остальная логика сохранена: информационные миниатюры, аудио-объявление, рандомная генерация миниатюр и т.д.)
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
@@ -282,12 +282,11 @@ function advanceStep(){
     const any = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
     if(any !== -1) currentIndex = any;
     else {
-      stepTitle.textContent = 'Победа!';
-      stepText.innerHTML = 'Вы успешно прошли квест. Поздравляем!';
+      // Все игровые шаги пройдены — перенаправляем на страницу победы
       savedState.currentIndex = clues.length - 1;
       saveState();
-      updatePlayButtonVisibility();
-      updateCardNextVisibility({});
+      // Переход на страницу victory.html (обязательно загрузите assets/audio/victory.mp3)
+      window.location.href = 'victory.html';
       return;
     }
   }

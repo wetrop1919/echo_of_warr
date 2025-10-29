@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Поздравляем — Победа!</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Небольшие правки конкретно для страницы победы */
+    .victory-container{max-width:900px;margin:40px auto;padding:1.25rem;background:#fff;border-radius:10px;box-shadow:0 6px 30px rgba(0,0,0,.08)}
+    .victory-hero{text-align:center;margin-bottom:18px}
+    .victory-hero h1{margin:0 0 6px;font-size:1.8rem;color:#1f6fb2}
+    .victory-hero p.lead{margin:0;color:#444}
+    .poem{white-space:pre-wrap;line-height:1.55;font-size:1.05rem;margin:18px 0;color:#111}
+    .victory-actions{display:flex;gap:.5rem;justify-content:center;margin-top:18px}
+    .btn-play{font-weight:600}
+    footer.victory-foot{margin-top:18px;text-align:center;color:#555;font-size:.95rem}
+  </style>
+</head>
+<body>
+  <main class="victory-container" role="main">
+    <div class="victory-hero">
+      <h1>Поздравляем с Победой!</h1>
+      <p class="lead">Вы успешно прошли квест и приблизились к истории нашей Победы.</p>
+    </div>
+
+    <!-- Аудио мелодия: положите файл assets/audio/victory.mp3 -->
+    <div style="text-align:center;margin-bottom:12px">
+      <audio id="victory-audio" src="assets/audio/victory.mp3" preload="auto"></audio>
+    </div>
+
+    <article class="poem" aria-label="Послание от бойцов отряда Славный">
+Послание от бойцов отряда «Славный» из 1941 года современным школьникам
+
+Из 41-го хотим вам пожелать
+Такого горя никогда не знать:
+Чтоб не летел на вас с неба огонь,
+Чтобы песни играла гармонь.
+
+Пусть висит одиноко пилотка,
+А рядом с нею солдатская фотка.
+Кобура лежит для пистолета.
+А в 41-ом тяжкое выдалось лето.
+
+Снаряды летели, взрывались,
+Гильзы чёрные в землю втыкались.
+От жажды спасала нас фляжка.
+У командира пробита фуражка.
+
+Нас каска от пуль защищала.
+Балалайка от скуки спасала.
+Фашист наступал до зимы.
+Но не смог он дойти до Москвы.
+
+Мы поганого зверя погнали.
+Берёзки и сосны своих защищали.
+Мы с победой вернулись домой.
+Чемодан прихватили с собой.
+
+Дневник в чемодане друзьям.
+От солдат 45-го - вам!
+О том, как сражался отряд,
+Как лучших терял он ребят.
+
+Они жизни свои положили,
+Чтобы в мире народы все жили.
+Память о «Славном», ребята, храните!
+И МИР на земле сберегите!
+    </article>
+
+    <p style="text-align:center;color:#333;margin-top:8px">
+      А после посещения музея вы сможете увидеть много интересных экспонатов и поиграть в другие увлекательные и познавательные квесты большой компанией.
+    </p>
+
+    <div class="victory-actions" aria-hidden="false">
+      <button id="play-victory" class="btn btn-play">Воспроизвести мелодию</button>
+      <button id="pause-victory" class="btn" style="display:none">Пауза</button>
+      <a href="index.html" class="btn" style="display:inline-block;text-decoration:none">Вернуться к квесту</a>
+    </div>
+
+    <footer class="victory-foot">
+      Если мелодия не играет автоматически — нажмите "Воспроизвести мелодию".<br>
+      Положите файл аудио в assets/audio/victory.mp3 — или при необходимости поменяйте путь в теге audio.
+    </footer>
+  </main>
+
+  <script>
+    // Попытка автозапуска: большинство браузеров разрешают воспроизведение, если пользователь совершил действие (в нашем квесте — нажатие "Далее" было).
+    (function(){
+      const audio = document.getElementById('victory-audio');
+      const playBtn = document.getElementById('play-victory');
+      const pauseBtn = document.getElementById('pause-victory');
+
+      // Попытка авто-play
+      function tryAutoPlay(){
+        audio.currentTime = 0;
+        const p = audio.play();
+        if (p !== undefined) {
+          p.then(()=> {
+            playBtn.style.display = 'none';
+            pauseBtn.style.display = '';
+          }).catch(()=> {
+            // авто-старт заблокирован — показываем кнопку Play
+            playBtn.style.display = '';
+            pauseBtn.style.display = 'none';
+          });
+        }
+      }
+
+      // Слушатели кнопок
+      playBtn.addEventListener('click', async ()=> {
+        try {
+          await audio.play();
+          playBtn.style.display = 'none';
+          pauseBtn.style.display = '';
+        } catch(e){
+          console.error('Play failed:', e);
+          alert('Не удалось воспроизвести аудио. Проверьте наличие файла assets/audio/victory.mp3 и откройте консоль для ошибок.');
+        }
+      });
+
+      pauseBtn.addEventListener('click', ()=> {
+        audio.pause();
+        pauseBtn.style.display = 'none';
+        playBtn.style.display = '';
+      });
+
+      // Пробуем автоплей после небольшого таймаута (даём браузеру время для навигации)
+      window.addEventListener('load', ()=> setTimeout(tryAutoPlay, 120));
+    })();
+  </script>
+</body>
+</html>
