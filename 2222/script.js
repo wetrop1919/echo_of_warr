@@ -1,5 +1,7 @@
-// Обновлённый script.js — ключное изменение: при полном прохождении квеста перенаправление на victory.html
-// (Остальная логика сохранена: информационные миниатюры, аудио-объявление, рандомная генерация миниатюр и т.д.)
+// Обновлённый script.js
+// - победа наступает, когда пройдены все игровые шаги (isExtra НЕ считается)
+// - total показывает количество игровых шагов, completed — количество пройденных игровых шагов
+// - информационные миниатюры (isExtra=true) не обязательны для победы
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
@@ -26,7 +28,9 @@ const levitanAudio = document.getElementById('levitan-audio');
 const resetBtn = document.getElementById('reset-progress');
 const cardNext = document.getElementById('card-next');
 
-let hotspotCount = 0; // количество кликабельных миниатюр (включая информационные)
+let hotspotCount = 0; // количество всех видимых миниатюр (не используется для победы)
+let gameIndexes = []; // индексы игровых шагов (без isExtra и без noHotspot)
+let gameTotal = 0;
 
 async function loadClues(){
   try {
@@ -61,21 +65,39 @@ async function loadClues(){
 
   if(savedState.currentIndex >= clues.length) savedState.currentIndex = 0;
 
-  // найти стартовый индекс (первый непройденный, если сохранённый пройден)
+  // подготовим список игровых индексов (исключаем информационные isExtra и полностью скрытые noHotspot)
+  gameIndexes = [];
+  for(let i=0;i<clues.length;i++){
+    const c = clues[i];
+    if(!c.isExtra && !c.noHotspot){
+      gameIndexes.push(i);
+    }
+  }
+  gameTotal = gameIndexes.length;
+
+  // найти стартовый индекс (первый непройденный игровой шаг или сохранённый)
   let startIdx = savedState.currentIndex || 0;
   if(savedState.completed && savedState.completed.includes(startIdx)){
-    const next = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
-    if(next !== -1) startIdx = next;
-    else startIdx = clues.length - 1;
+    // найдём первый игровой индекс, который ещё не пройден
+    const nextGame = gameIndexes.find(idx => !savedState.completed.includes(idx));
+    if(typeof nextGame !== 'undefined') startIdx = nextGame;
+    else startIdx = gameIndexes.length ? gameIndexes[gameIndexes.length - 1] : 0;
+  }
+  // если сохранённый индекс указывает на isExtra или т.п., постараемся перейти на ближайший игровой
+  if(!gameIndexes.includes(startIdx)){
+    const nearest = gameIndexes.find(idx => idx >= startIdx) ?? gameIndexes[0] ?? 0;
+    startIdx = nearest;
   }
   currentIndex = startIdx;
 
-  // сгенерируем миниатюры (включая isExtra) и посчитаем их количество
+  // сгенерируем миниатюры (включая информационные isExtra) и посчитаем их количество
   generateHotspotsRandomized();
 
-  // отображаем счётчики
-  totalCounter.textContent = hotspotCount;
-  completedCounter.textContent = savedState.completed.length;
+  // отображаем счётчики игровых шагов
+  totalCounter.textContent = gameTotal;
+  // подсчитываем сколько из игровых индексов уже в savedState.completed
+  const doneGames = savedState.completed.filter(idx => gameIndexes.includes(idx)).length;
+  completedCounter.textContent = doneGames;
 
   renderStep();
   updatePlayButtonVisibility();
@@ -125,7 +147,7 @@ function generateHotspotsRandomized(){
 
   for(let i=0;i<clues.length;i++){
     const c = clues[i];
-    if(c.noHotspot) continue; // полностью невидимые (были случаи для аудио-only); пропускаем
+    if(c.noHotspot) continue; // полностью невидимые; пропускаем
 
     hotspotCount++;
 
@@ -146,6 +168,11 @@ function generateHotspotsRandomized(){
           if(Math.hypot(dx, dy) < minGap) { ok = false; break; }
         }
         attempts++;
+      }
+      // если не нашли хорошее место — допускаем последнюю позицию
+      if(!ok){
+        leftPct = 10 + Math.random() * 80;
+        topPct = 10 + Math.random() * 70;
       }
     }
     placed.push({ left: leftPct, top: topPct });
@@ -268,31 +295,53 @@ function closeViewer(){
 function markCompleted(index, btnElement){
   const btn = btnElement || document.querySelector(`.hotspot[data-index="${index}"]`);
   if(btn) btn.classList.add('completed');
-  if(!savedState.completed.includes(index)) savedState.completed.push(index);
-  completedCounter.textContent = savedState.completed.length;
+
+  // добавляем в savedState только если это игровой индекс (из gameIndexes)
+  if(gameIndexes.includes(index) && !savedState.completed.includes(index)){
+    savedState.completed.push(index);
+  }
+
+  // обновляем видимый счётчик только по игровым шагам
+  const doneGames = savedState.completed.filter(idx => gameIndexes.includes(idx)).length;
+  completedCounter.textContent = doneGames;
+
   saveState();
+
+  // проверяем победу (все игровые индексы пройдены)
+  const allDone = gameIndexes.every(idx => savedState.completed.includes(idx));
+  if(allDone){
+    // сохраняем состояние и переходим на страницу победы
+    savedState.currentIndex = clues.length - 1;
+    saveState();
+    window.location.href = 'victory.html';
+  }
 }
 
 function advanceStep(){
-  // Найти следующий непройденный шаг (включая информационные в распределении, но они не считаются пройденными автоматически)
-  const nextIndexAfter = clues.findIndex((c, idx) => !savedState.completed.includes(idx) && idx > currentIndex);
-  if(nextIndexAfter !== -1){
-    currentIndex = nextIndexAfter;
-  } else {
-    const any = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
-    if(any !== -1) currentIndex = any;
-    else {
-      // Все игровые шаги пройдены — перенаправляем на страницу победы
-      savedState.currentIndex = clues.length - 1;
-      saveState();
-      // Переход на страницу victory.html (обязательно загрузите assets/audio/victory.mp3)
-      window.location.href = 'victory.html';
-      return;
-    }
+  // Найти следующий непройденный игровой шаг (только среди gameIndexes), после текущего
+  const nextAfter = gameIndexes.find(idx => idx > currentIndex && !savedState.completed.includes(idx));
+  if(typeof nextAfter !== 'undefined'){
+    currentIndex = nextAfter;
+    savedState.currentIndex = currentIndex;
+    saveState();
+    renderStep();
+    return;
   }
-  savedState.currentIndex = currentIndex;
+
+  // если нет после текущего, найти любой непройденный игровой шаг
+  const any = gameIndexes.find(idx => !savedState.completed.includes(idx));
+  if(typeof any !== 'undefined'){
+    currentIndex = any;
+    savedState.currentIndex = currentIndex;
+    saveState();
+    renderStep();
+    return;
+  }
+
+  // Если все игровые шаги пройдены — победа
+  savedState.currentIndex = clues.length - 1;
   saveState();
-  renderStep();
+  window.location.href = 'victory.html';
 }
 
 function saveState(){
@@ -306,7 +355,7 @@ function resetProgress(){
   saveState();
   document.querySelectorAll('.hotspot.completed').forEach(n => n.classList.remove('completed'));
   completedCounter.textContent = 0;
-  currentIndex = 0;
+  currentIndex = gameIndexes.length ? gameIndexes[0] : 0;
   renderStep();
 }
 
