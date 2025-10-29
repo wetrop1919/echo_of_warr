@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Шаги к Победе</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+    .container {
+      display: flex;
+      height: 100vh;
+      background: #000;
+    }
+    .museum {
+      position: relative;
+      flex: 1;
+    }
+    .museum img.bg {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .exhibit {
+      position: absolute;
+      width: 70px;
+      height: 70px;
+      cursor: pointer;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .exhibit:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 10px 3px gold;
+    }
+    .panel {
+      width: 30%;
+      background: rgba(30, 30, 30, 0.95);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .panel h1 {
+      font-size: 1.6em;
+      margin-bottom: 10px;
+      color: #ffd700;
+    }
+    .panel p {
+      font-size: 1.1em;
+      line-height: 1.4em;
+    }
+    .modal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+    .modal-content {
+      background: #222;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 500px;
+      text-align: center;
+    }
+    .modal-content img {
+      width: 100%;
+      border-radius: 10px;
+    }
+    .modal-content button {
+      margin-top: 10px;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #555;
+      color: #fff;
+      cursor: pointer;
+    }
+    .modal-content button:hover {
+      background: #777;
+    }
+  </style>
+</head>
+<body>
+  <audio id="okSound" src="assets/ok.mp3" preload="auto"></audio>
+  <audio id="failSound" src="assets/fail.mp3" preload="auto"></audio>
+  <audio id="bgMusic" src="assets/bg_music.mp3" autoplay loop></audio>
+
+  <div class="container">
+    <div class="museum">
+      <img src="assets/museum.jpg" class="bg" alt="Музей" />
+
+      <!-- Примеры экспонатов -->
+      <img src="assets/cobura_thumb.jpg" alt="Кобура" class="exhibit" style="left:15%; top:45%;" onclick="checkAnswer('cobura')" />
+      <img src="assets/vladimirov_thumb.jpg" alt="Владимиров" class="exhibit" style="left:45%; top:30%;" onclick="checkAnswer('vladimirov')" />
+      <!-- Добавь остальные миниатюры по аналогии -->
+    </div>
+
+    <div class="panel">
+      <div>
+        <h1 id="stepTitle">1-й шаг к Победе</h1>
+        <p id="stepTask">Найдите предмет, оповестивший голосом Левитана о начале войны.</p>
+      </div>
+      <div id="progress" style="text-align:right; color:#aaa;">Шаг 1 из 2</div>
+    </div>
+  </div>
+
+  <div id="modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <img id="modalImg" src="" alt="" />
+      <h2 id="modalName"></h2>
+      <p id="modalDesc"></p>
+      <h3 id="modalResult"></h3>
+      <button onclick="closeModal()">Закрыть</button>
+    </div>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        id: 1,
+        title: "1-й шаг к Победе",
+        task: "Найдите предмет, оповестивший голосом Левитана о начале войны.",
+        correct: "cobura",
+      },
+      {
+        id: 2,
+        title: "2-й шаг к Победе",
+        task: "Найдите фотографию защитника Могилёва, капитана Владимирова.",
+        correct: "vladimirov",
+      },
+      // Добавь остальные шаги
+    ];
+
+    const exhibits = {
+      cobura: {
+        name: "Кобура",
+        full: "assets/cobura.jpg",
+        description: "Описание экспоната появится позже.",
+      },
+      vladimirov: {
+        name: "Фото Владимирова",
+        full: "assets/vladimirov.jpg",
+        description: "Описание экспоната появится позже.",
+      },
+      // Добавь остальные экспонаты
+    };
+
+    let currentStep = 0;
+
+    function checkAnswer(id) {
+      const step = steps[currentStep];
+      const ex = exhibits[id];
+      const okSound = document.getElementById("okSound");
+      const failSound = document.getElementById("failSound");
+
+      if (!ex) return;
+
+      const modal = document.getElementById("modal");
+      document.getElementById("modalImg").src = ex.full;
+      document.getElementById("modalName").innerText = ex.name;
+      document.getElementById("modalDesc").innerText = ex.description;
+
+      if (id === step.correct) {
+        document.getElementById("modalResult").innerText = "✅ Правильно!";
+        okSound.play();
+        setTimeout(() => {
+          nextStep();
+          closeModal();
+        }, 3000);
+      } else {
+        document.getElementById("modalResult").innerText = "❌ Неверно!";
+        failSound.play();
+        setTimeout(closeModal, 3000);
+      }
+
+      modal.style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("modal").style.display = "none";
+    }
+
+    function nextStep() {
+      currentStep++;
+      if (currentStep >= steps.length) {
+        document.getElementById("stepTitle").innerText = "🎖️ Победа!";
+        document.getElementById("stepTask").innerText =
+          "Поздравляем! Вы прошли весь путь к Победе!";
+        document.getElementById("progress").innerText = "";
+      } else {
+        const s = steps[currentStep];
+        document.getElementById("stepTitle").innerText = s.title;
+        document.getElementById("stepTask").innerText = s.task;
+        document.getElementById("progress").innerText =
+          `Шаг ${currentStep + 1} из ${steps.length}`;
+      }
+    }
+  </script>
+</body>
+</html>
