@@ -1,11 +1,15 @@
-// script.js — стабильная версия (восстановление рабочей логики "версия 7")
-// Простая, надёжная реализация: загрузка data/clues.json, генерация hotspot'ов,
-// модал просмотра, проверка правильности, сохранение прогресса в localStorage.
+// Обновлённый script.js
+// - добавлена поддержка "нулевой" подсказки без миниатюры (noHotspot) с полем audio
+// - play button виден если у текущей подсказки есть audio
+// - если подсказка noHotspot, на карточке показывается "Далее" для перехода
+// - генерация миниатюр пропускает элементы с noHotspot
+// - totalCounter показывает количество кликабельных миниатюр (hotspots)
+// - сохранение прогресса в localStorage остается
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
 let clues = [];
-let currentIndex = 0;
+let currentIndex = 0; // индекс в массиве clues (0..n-1)
 let savedState = { currentIndex: 0, completed: [] };
 
 const mapImage = document.getElementById('map-image');
@@ -13,11 +17,10 @@ const stepTitle = document.getElementById('step-title');
 const stepText = document.getElementById('step-text');
 const completedCounter = document.getElementById('completed');
 const totalCounter = document.getElementById('total');
-
 const viewer = document.getElementById('viewer');
 const viewerImg = document.getElementById('viewer-img');
-const viewerTitle = document.getElementById('viewer-title');
 const viewerDesc = document.getElementById('viewer-desc');
+const viewerTitle = document.getElementById('viewer-title');
 const viewerResult = document.getElementById('viewer-result');
 const viewerNext = document.getElementById('viewer-next');
 const viewerClose = document.getElementById('viewer-close');
@@ -28,126 +31,140 @@ const levitanAudio = document.getElementById('levitan-audio');
 const resetBtn = document.getElementById('reset-progress');
 const cardNext = document.getElementById('card-next');
 
-let gameIndexes = []; // игровые индексы (без isExtra и без noHotspot)
-let gameTotal = 0;
+let hotspotCount = 0; // количество кликабельных миниатюр
 
-// --- Утилиты ---
-function escapeHtml(str){ if(!str) return ''; return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
-function log(...args){ console.log('[quest]', ...args); }
-
-// --- UI ошибки ---
-function showError(msg){
-  if(stepTitle) stepTitle.textContent = 'Ошибка';
-  if(stepText) stepText.textContent = msg;
-  console.error(msg);
-}
-
-// --- Загрузка подсказок ---
 async function loadClues(){
   try {
-    if(stepTitle) stepTitle.textContent = 'Загрузка...';
-    if(stepText) stepText.textContent = 'Загружаю подсказки...';
-
     const res = await fetch('data/clues.json', { cache: 'no-store' });
     if(!res.ok){
-      showError(`HTTP ${res.status} ${res.statusText} при запросе data/clues.json`);
+      stepTitle.textContent = 'Ошибка загрузки';
+      stepText.textContent = `HTTP ${res.status} ${res.statusText} при запросе data/clues.json`;
       return;
     }
     clues = await res.json();
-    if(!Array.isArray(clues) || clues.length === 0){
-      showError('data/clues.json пуст или не массив');
-      return;
-    }
-
-    // восстановление состояния
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      try { const p = JSON.parse(raw); if(p && Array.isArray(p.completed)) savedState = p; } catch(e){ console.warn('savedState parse failed', e); }
-    }
-    if(typeof savedState.currentIndex !== 'number') savedState.currentIndex = 0;
-
-    // построим список игровых индексов
-    gameIndexes = [];
-    clues.forEach((c, idx) => {
-      if(!c.isExtra && !c.noHotspot) gameIndexes.push(idx);
-    });
-    gameTotal = gameIndexes.length;
-
-    // установим currentIndex: если сохраненный указывает не на игровой — найдем первый игровой
-    let start = savedState.currentIndex || 0;
-    if(!clues[start] || clues[start].isExtra || clues[start].noHotspot){
-      start = gameIndexes.find(i => !savedState.completed.includes(i)) ?? (gameIndexes[0] ?? 0);
-    } else if(savedState.completed && savedState.completed.includes(start)){
-      start = gameIndexes.find(i => !savedState.completed.includes(i)) ?? (gameIndexes[0] ?? 0);
-    }
-    currentIndex = start;
-
-    // отрисуем все
-    generateHotspots();
-    updateCounters();
-    renderStep();
-    attachHandlers();
-
-  } catch(err){
-    showError('Ошибка при загрузке подсказок: ' + (err && err.message ? err.message : String(err)));
+  } catch(e){
+    console.error('Ошибка при загрузке подсказок', e);
+    stepTitle.textContent = 'Ошибка загрузки';
+    stepText.textContent = 'Невозможно загрузить подсказки. Убедитесь, что сайт запущен через http(s) и файл data/clues.json доступен.';
+    return;
   }
+
+  if(!Array.isArray(clues) || clues.length === 0){
+    stepTitle.textContent = 'Нет подсказок';
+    stepText.textContent = 'Файл data/clues.json пуст или содержит неверную структуру.';
+    return;
+  }
+
+  // восстановление прогресса
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
+    try {
+      const parsed = JSON.parse(raw);
+      if(parsed && Array.isArray(parsed.completed)) savedState = parsed;
+    } catch(e){ console.warn('Неверный формат savedState', e); }
+  }
+
+  if(savedState.currentIndex >= clues.length) savedState.currentIndex = 0;
+
+  // найти стартовый индекс (первый непройденный, если сохранённый пройден)
+  let startIdx = savedState.currentIndex || 0;
+  if(savedState.completed && savedState.completed.includes(startIdx)){
+    const next = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
+    if(next !== -1) startIdx = next;
+    else startIdx = clues.length - 1;
+  }
+  currentIndex = startIdx;
+
+  // сгенерируем миниатюры (пропуская noHotspot) и посчитаем их количество
+  generateHotspotsRandomized();
+
+  // отображаем счётчики
+  totalCounter.textContent = hotspotCount;
+  completedCounter.textContent = savedState.completed.length;
+
+  renderStep();
+  updatePlayButtonVisibility();
+
+  // обработчики кнопок
+  playBtn.addEventListener('click', () => {
+    if(!clues[currentIndex] || !clues[currentIndex].audio) return;
+    levitanAudio.src = clues[currentIndex].audio;
+    levitanAudio.currentTime = 0;
+    levitanAudio.play().catch(()=>{/* ignore */});
+  });
+
+  // при окончании аудио — можно автоматически переходить дальше, если текущая подсказка noHotspot
+  levitanAudio.addEventListener('ended', () => {
+    if(clues[currentIndex] && clues[currentIndex].noHotspot){
+      // при окончании объявления — перейти дальше автоматически
+      advanceStep();
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    if(!confirm('Сбросить прогресс?')) return;
+    resetProgress();
+  });
+
+  cardNext.addEventListener('click', () => {
+    // если это подсказка без миниатюры — просто перейти дальше
+    advanceStep();
+  });
 }
 
-// --- Генерация hotspot'ов ---
-function generateHotspots(){
-  if(!mapImage) { showError('Элемент карты не найден (id="map-image")'); return; }
-  // очистим
+// Генерация hotspot'ов в случайных позициях (попытка избежать сильных перекрытий)
+// Пропускаются записи с поля noHotspot = true
+function generateHotspotsRandomized(){
+  // удалить старые
   Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove());
 
   const placed = [];
   const frag = document.createDocumentFragment();
   const tryLimit = 40;
-  const minGap = 7;
+  const minGap = 8; // минимальное расстояние в % между центрами (приблизительно)
+
+  hotspotCount = 0;
 
   for(let i=0;i<clues.length;i++){
     const c = clues[i];
-    if(c.noHotspot) continue;
+    if(c.noHotspot) continue; // пропускаем нулевые/аудио только подсказки
 
-    // позиция: если left/top заданы — используем, иначе случайно
-    let left = 6 + Math.random()*88;
-    let top = 8 + Math.random()*78;
-    if(c.left && c.top){
-      const parsedL = parseFloat(String(c.left).replace('%',''));
-      const parsedT = parseFloat(String(c.top).replace('%',''));
-      if(!isNaN(parsedL) && !isNaN(parsedT)){ left = parsedL; top = parsedT; }
-    } else {
-      let attempts = 0, ok = false;
-      while(attempts < tryLimit && !ok){
-        left = 6 + Math.random()*88;
-        top = 8 + Math.random()*78;
-        ok = true;
-        for(const p of placed){ if(Math.hypot(p.left-left, p.top-top) < minGap) { ok = false; break; } }
-        attempts++;
+    hotspotCount++;
+
+    // попытаться найти позицию, не слишком близко к другим
+    let leftPct, topPct, attempts = 0, ok=false;
+    while(attempts < tryLimit && !ok){
+      leftPct = 6 + Math.random() * 88; // 6%..94% - отступы от краёв
+      topPct = 8 + Math.random() * 78;  // 8%..86%
+      ok = true;
+      for(const p of placed){
+        const dx = Math.abs(p.left - leftPct);
+        const dy = Math.abs(p.top - topPct);
+        if(Math.hypot(dx, dy) < minGap) { ok = false; break; }
       }
+      attempts++;
     }
-    placed.push({ left, top });
+    placed.push({ left: leftPct, top: topPct });
 
     const btn = document.createElement('button');
     btn.className = 'hotspot';
-    btn.type = 'button';
     btn.setAttribute('data-index', i);
-    btn.style.left = `${left}%`;
-    btn.style.top = `${top}%`;
-    btn.setAttribute('aria-label', c.objectName || c.title || `Объект ${i+1}`);
+    btn.setAttribute('aria-label', c.objectName || `Объект ${i+1}`);
+    btn.style.left = `${leftPct.toFixed(2)}%`;
+    btn.style.top = `${topPct.toFixed(2)}%`;
 
     const img = document.createElement('img');
     img.src = c.thumb || c.media || c.photo || 'assets/placeholder.jpg';
     img.alt = c.objectName || c.title || `миниатюра ${i+1}`;
-    img.draggable = false;
 
     btn.appendChild(img);
 
-    // основной обработчик
+    if(savedState.completed && savedState.completed.includes(i)) btn.classList.add('completed');
+
     btn.addEventListener('click', (ev) => {
       ev.preventDefault();
-      const idx = Number(btn.getAttribute('data-index'));
-      log('hotspot click', idx);
-      handleClick(idx, btn);
+      const clickedIndex = Number(btn.dataset.index);
+      handleClick(clickedIndex, btn);
     });
 
     frag.appendChild(btn);
@@ -156,161 +173,133 @@ function generateHotspots(){
   mapImage.appendChild(frag);
 }
 
-// --- Отобразить шаг (карточка справа) ---
 function renderStep(){
   const c = clues[currentIndex];
-  if(!c){ stepTitle && (stepTitle.textContent = '—'); stepText && (stepText.textContent = ''); return; }
-  stepTitle && (stepTitle.textContent = c.title || `Шаг ${currentIndex+1}`);
-  stepText && (stepText.innerHTML = `<strong>Подсказка:</strong> ${escapeHtml(c.clue || c.text || '')}`);
+  stepTitle.textContent = c ? (c.title || `Шаг ${currentIndex+1}`) : '—';
+  const clueText = c ? (c.clue || c.text || '') : '';
+  // Показываем только подсказку: подробный ответ (descr) убран из карточки
+  stepText.innerHTML = `<strong>Подсказка:</strong> ${escapeHtml(clueText)}`;
+
+  // показать/скрыть playBtn и cardNext в зависимости от полей у текущей подсказки
   updatePlayButtonVisibility();
   updateCardNextVisibility(c);
 }
 
-// --- Кнопки play и cardNext видимость ---
 function updatePlayButtonVisibility(){
   const c = clues[currentIndex];
-  if(playBtn) playBtn.style.display = (c && c.audio) ? '' : 'none';
-}
-function updateCardNextVisibility(c){
-  if(cardNext) cardNext.classList.toggle('hidden', !(c && c.noHotspot));
+  if(c && c.audio) {
+    playBtn.style.display = '';
+  } else {
+    playBtn.style.display = 'none';
+  }
 }
 
-// --- Обработка клика по миниатюре ---
+// Показывать кнопку "Далее" в карточке, если текущая подсказка noHotspot (а значит переход выполняется вручную)
+function updateCardNextVisibility(c){
+  if(c && c.noHotspot){
+    cardNext.classList.remove('hidden');
+  } else {
+    cardNext.classList.add('hidden');
+  }
+}
+
 function handleClick(clickedIndex, btnElement){
   const current = clues[currentIndex];
   const clicked = clues[clickedIndex];
-  if(!clicked){
-    log('clicked undefined', clickedIndex);
-    return;
-  }
 
-  // заполним модал
-  if(viewerImg) viewerImg.src = clicked.media || clicked.photo || clicked.thumb || 'assets/placeholder-large.jpg';
-  if(viewerImg) viewerImg.alt = clicked.objectName || clicked.title || '';
-  if(viewerTitle) viewerTitle.textContent = clicked.objectName || clicked.title || `Объект ${clickedIndex+1}`;
-  if(viewerDesc) viewerDesc.textContent = clicked.descr || clicked.objectDesc || clicked.clue || '';
+  viewerImg.src = clicked.media || clicked.photo || clicked.thumb || 'assets/placeholder-large.jpg';
+  viewerImg.alt = clicked.objectName || clicked.title || '';
+  viewerTitle.textContent = clicked.objectName || clicked.title || `Объект ${clickedIndex+1}`;
+  // подробный ответ показывается только в модальном окне (viewerDesc)
+  viewerDesc.textContent = clicked.descr || clicked.objectDesc || clicked.clue || '';
 
-  // информационные экспонаты (isExtra) — просто показать информацию, не трогаем прогресс
-  if(clicked.isExtra){
-    if(viewerResult) { viewerResult.textContent = ''; viewerResult.className = 'viewer-result'; }
-    if(viewerNext) { viewerNext.classList.add('hidden'); viewerNext.onclick = null; }
-    openViewer();
-    return;
-  }
-
-  // игровая логика
   if(clickedIndex === currentIndex){
-    if(viewerResult) { viewerResult.textContent = 'Правильно'; viewerResult.className = 'viewer-result ok'; }
-    if(viewerNext){
-      viewerNext.classList.remove('hidden');
-      viewerNext.onclick = () => {
-        markCompleted(clickedIndex, btnElement);
-        closeViewer();
-        advanceStep();
-      };
-    }
+    viewerResult.textContent = 'Правильно';
+    viewerResult.className = 'viewer-result ok';
+    viewerNext.classList.remove('hidden');
+    viewerNext.onclick = () => {
+      markCompleted(clickedIndex, btnElement);
+      closeViewer();
+      advanceStep();
+    };
   } else {
-    if(viewerResult) { viewerResult.textContent = 'Неверно'; viewerResult.className = 'viewer-result bad'; }
-    if(viewerNext){ viewerNext.classList.add('hidden'); viewerNext.onclick = null; }
+    viewerResult.textContent = 'Неверно';
+    viewerResult.className = 'viewer-result bad';
+    viewerNext.classList.add('hidden');
+    viewerNext.onclick = null;
   }
 
   openViewer();
 }
 
-// --- Открыть / закрыть модал (явно выставляем display) ---
 function openViewer(){
-  if(!viewer){
-    alert('Описание: ' + (viewerTitle ? viewerTitle.textContent : '') + '\n\n' + (viewerDesc ? viewerDesc.textContent : ''));
-    return;
-  }
   viewer.classList.remove('hidden');
-  try { viewer.style.display = 'flex'; viewer.style.zIndex = 9999; } catch(e){ /* ignore */ }
-  setTimeout(()=> {
-    if(viewerNext && !viewerNext.classList.contains('hidden')) viewerNext.focus();
-    else if(viewerClose) viewerClose.focus();
-  }, 60);
-}
-function closeViewer(){
-  if(!viewer) return;
-  viewer.classList.add('hidden');
-  try { viewer.style.display = 'none'; } catch(e){ /* ignore */ }
+  viewerClose.focus();
 }
 
-// --- Отметить как пройденный и сохранить ---
+function closeViewer(){
+  viewer.classList.add('hidden');
+}
+
 function markCompleted(index, btnElement){
   const btn = btnElement || document.querySelector(`.hotspot[data-index="${index}"]`);
   if(btn) btn.classList.add('completed');
-
-  if(!savedState.completed.includes(index) && gameIndexes.includes(index)){
-    savedState.completed.push(index);
-  }
-  updateCounters();
+  if(!savedState.completed.includes(index)) savedState.completed.push(index);
+  completedCounter.textContent = savedState.completed.length;
   saveState();
-
-  // проверяем победу по игровым индексам
-  const allDone = gameIndexes.every(i => savedState.completed.includes(i));
-  if(allDone){
-    savedState.currentIndex = clues.length - 1;
-    saveState();
-    window.location.href = 'victory.html';
-  }
 }
 
-// --- Перейти к следующему шагу (игровому) ---
 function advanceStep(){
-  // следующий непройденный игровой индекс > currentIndex
-  let next = gameIndexes.find(i => i > currentIndex && !savedState.completed.includes(i));
-  if(typeof next === 'undefined'){
-    next = gameIndexes.find(i => !savedState.completed.includes(i));
+  // Найти следующий непройденный шаг (включая noHotspot-элементы)
+  const nextIndexAfter = clues.findIndex((c, idx) => !savedState.completed.includes(idx) && idx > currentIndex);
+  if(nextIndexAfter !== -1){
+    currentIndex = nextIndexAfter;
+  } else {
+    const any = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
+    if(any !== -1) currentIndex = any;
+    else {
+      stepTitle.textContent = 'Победа!';
+      stepText.innerHTML = 'Вы успешно прошли квест. Поздравляем!';
+      savedState.currentIndex = clues.length - 1;
+      saveState();
+      updatePlayButtonVisibility();
+      updateCardNextVisibility({});
+      return;
+    }
   }
-  if(typeof next !== 'undefined'){
-    currentIndex = next;
-    savedState.currentIndex = currentIndex;
-    saveState();
-    renderStep();
-    return;
-  }
-  // все пройдены
-  savedState.currentIndex = clues.length - 1;
+  savedState.currentIndex = currentIndex;
   saveState();
-  window.location.href = 'victory.html';
-}
-
-// --- Счётчики и сохранение ---
-function updateCounters(){
-  const done = savedState.completed.filter(i => gameIndexes.includes(i)).length;
-  completedCounter && (completedCounter.textContent = done);
-  totalCounter && (totalCounter.textContent = gameTotal);
-}
-function saveState(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(savedState)); } catch(e){ console.warn('saveState failed', e); }
-}
-function resetProgress(){
-  savedState = { currentIndex: 0, completed: [] };
-  saveState();
-  document.querySelectorAll('.hotspot.completed').forEach(el => el.classList.remove('completed'));
-  currentIndex = gameIndexes[0] || 0;
-  updateCounters();
   renderStep();
 }
 
-// --- UI обработчики ---
-function attachHandlers(){
-  if(playBtn){
-    playBtn.onclick = async () => {
-      const c = clues[currentIndex];
-      if(!c || !c.audio) return;
-      try { levitanAudio.src = c.audio; levitanAudio.load(); await levitanAudio.play(); } catch(e){ console.warn('audio play failed', e); }
-    };
-  }
-  if(resetBtn) resetBtn.onclick = () => { if(confirm('Сбросить прогресс?')) resetProgress(); };
-  if(cardNext) cardNext.onclick = () => advanceStep();
-  if(viewerClose) viewerClose.onclick = closeViewer;
-  if(viewerClose2) viewerClose2.onclick = closeViewer;
-  window.addEventListener('keydown', e => { if(e.key === 'Escape') closeViewer(); });
+function saveState(){
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedState));
+  } catch(e){ console.warn('Не удалось сохранить прогресс', e); }
 }
 
-// --- Запуск ---
-document.addEventListener('DOMContentLoaded', () => {
-  loadClues();
-});
+function resetProgress(){
+  savedState = { currentIndex: 0, completed: [] };
+  saveState();
+  document.querySelectorAll('.hotspot.completed').forEach(n => n.classList.remove('completed'));
+  completedCounter.textContent = 0;
+  currentIndex = 0;
+  renderStep();
+}
+
+viewerClose.addEventListener('click', closeViewer);
+viewerClose2.addEventListener('click', closeViewer);
+window.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeViewer(); });
+
+function escapeHtml(str){
+  if(!str) return '';
+  return String(str)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#39;');
+}
+
+// Запуск
+loadClues();
