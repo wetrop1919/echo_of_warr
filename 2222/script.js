@@ -1,8 +1,6 @@
-// Обновлённый script.js
-//  - в карточке показываем только подсказку (clue), подробный ответ только в модальном окне
-//  - номера на миниатюрах убраны
-//  - миниатюры размещаются хаотично при загрузке (случайные координаты, попытка уменьшить перекрытие)
-// Сохранение прогресса и аудио для первого шага остаются.
+// Обновлённый script.js: добавлено автоматическое фокусирование кнопки "Далее" в модалке,
+// при открытии модалки — чтобы не приходилось скроллить, и оставлена прежняя логика отображения.
+// (Остальной код совпадает с последней рабочей версией проекта.)
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
@@ -27,6 +25,9 @@ const viewerClose2 = document.getElementById('viewer-close-2');
 const playBtn = document.getElementById('play-announcement');
 const levitanAudio = document.getElementById('levitan-audio');
 const resetBtn = document.getElementById('reset-progress');
+const cardNext = document.getElementById('card-next');
+
+let hotspotCount = 0; // количество кликабельных миниатюр
 
 async function loadClues(){
   try {
@@ -40,7 +41,7 @@ async function loadClues(){
   } catch(e){
     console.error('Ошибка при загрузке подсказок', e);
     stepTitle.textContent = 'Ошибка загрузки';
-    stepText.textContent = 'Невозможно загрузить подсказки. Убедитесь, что site запущен через http(s) и файл data/clues.json доступен.';
+    stepText.textContent = 'Невозможно загрузить подсказки. Убедитесь, что сайт запущен через http(s) и файл data/clues.json доступен.';
     return;
   }
 
@@ -70,26 +71,42 @@ async function loadClues(){
   }
   currentIndex = startIdx;
 
-  totalCounter.textContent = clues.length;
-  completedCounter.textContent = savedState.completed ? savedState.completed.length : 0;
-
+  // сгенерируем миниатюры (пропуская noHotspot) и посчитаем их количество
   generateHotspotsRandomized();
+
+  // отображаем счётчики
+  totalCounter.textContent = hotspotCount;
+  completedCounter.textContent = savedState.completed.length;
 
   renderStep();
   updatePlayButtonVisibility();
 
   // обработчики кнопок
   playBtn.addEventListener('click', () => {
+    if(!clues[currentIndex] || !clues[currentIndex].audio) return;
+    levitanAudio.src = clues[currentIndex].audio;
     levitanAudio.currentTime = 0;
     levitanAudio.play().catch(()=>{/* ignore */});
   });
+
+  levitanAudio.addEventListener('ended', () => {
+    if(clues[currentIndex] && clues[currentIndex].noHotspot){
+      advanceStep();
+    }
+  });
+
   resetBtn.addEventListener('click', () => {
     if(!confirm('Сбросить прогресс?')) return;
     resetProgress();
   });
+
+  cardNext.addEventListener('click', () => {
+    advanceStep();
+  });
 }
 
 // Генерация hotspot'ов в случайных позициях (попытка избежать сильных перекрытий)
+// Пропускаются записи с поля noHotspot = true
 function generateHotspotsRandomized(){
   // удалить старые
   Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove());
@@ -99,8 +116,14 @@ function generateHotspotsRandomized(){
   const tryLimit = 40;
   const minGap = 8; // минимальное расстояние в % между центрами (приблизительно)
 
+  hotspotCount = 0;
+
   for(let i=0;i<clues.length;i++){
     const c = clues[i];
+    if(c.noHotspot) continue; // пропускаем нулевые/аудио только подсказки
+
+    hotspotCount++;
+
     // попытаться найти позицию, не слишком близко к другим
     let leftPct, topPct, attempts = 0, ok=false;
     while(attempts < tryLimit && !ok){
@@ -110,12 +133,10 @@ function generateHotspotsRandomized(){
       for(const p of placed){
         const dx = Math.abs(p.left - leftPct);
         const dy = Math.abs(p.top - topPct);
-        // простая эвристика расстояния
         if(Math.hypot(dx, dy) < minGap) { ok = false; break; }
       }
       attempts++;
     }
-    // если не получилось найти непересекаемую позицию — оставляем последнюю
     placed.push({ left: leftPct, top: topPct });
 
     const btn = document.createElement('button');
@@ -147,15 +168,31 @@ function generateHotspotsRandomized(){
 
 function renderStep(){
   const c = clues[currentIndex];
-  stepTitle.textContent = c.title || `Шаг ${currentIndex+1}`;
-  const clueText = c.clue || c.text || '';
+  stepTitle.textContent = c ? (c.title || `Шаг ${currentIndex+1}`) : '—';
+  const clueText = c ? (c.clue || c.text || '') : '';
   // Показываем только подсказку: подробный ответ (descr) убран из карточки
   stepText.innerHTML = `<strong>Подсказка:</strong> ${escapeHtml(clueText)}`;
+
+  // показать/скрыть playBtn и cardNext в зависимости от полей у текущей подсказки
   updatePlayButtonVisibility();
+  updateCardNextVisibility(c);
 }
 
 function updatePlayButtonVisibility(){
-  playBtn.style.display = (currentIndex === 0) ? '' : 'none';
+  const c = clues[currentIndex];
+  if(c && c.audio) {
+    playBtn.style.display = '';
+  } else {
+    playBtn.style.display = 'none';
+  }
+}
+
+function updateCardNextVisibility(c){
+  if(c && c.noHotspot){
+    cardNext.classList.remove('hidden');
+  } else {
+    cardNext.classList.add('hidden');
+  }
 }
 
 function handleClick(clickedIndex, btnElement){
@@ -189,7 +226,18 @@ function handleClick(clickedIndex, btnElement){
 
 function openViewer(){
   viewer.classList.remove('hidden');
-  viewerClose.focus();
+
+  // Дадим браузеру время отрисовать модалку, затем фокусируем кнопку "Далее" (если видна),
+  // иначе фокусируем крестик закрытия — это упрощает взаимодействие клавиатурой
+  setTimeout(()=> {
+    if (!viewer.classList.contains('hidden')) {
+      if (viewerNext && !viewerNext.classList.contains('hidden')) {
+        try { viewerNext.focus(); } catch(e){ viewerClose.focus(); }
+      } else {
+        try { viewerClose.focus(); } catch(e){ /* ignore */ }
+      }
+    }
+  }, 60);
 }
 
 function closeViewer(){
@@ -205,9 +253,11 @@ function markCompleted(index, btnElement){
 }
 
 function advanceStep(){
-  const nextIndex = clues.findIndex((c, idx) => !savedState.completed.includes(idx) && idx > currentIndex);
-  if(nextIndex !== -1) currentIndex = nextIndex;
-  else {
+  // Найти следующий непройденный шаг (включая noHotspot-элементы)
+  const nextIndexAfter = clues.findIndex((c, idx) => !savedState.completed.includes(idx) && idx > currentIndex);
+  if(nextIndexAfter !== -1){
+    currentIndex = nextIndexAfter;
+  } else {
     const any = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
     if(any !== -1) currentIndex = any;
     else {
@@ -216,6 +266,7 @@ function advanceStep(){
       savedState.currentIndex = clues.length - 1;
       saveState();
       updatePlayButtonVisibility();
+      updateCardNextVisibility({});
       return;
     }
   }

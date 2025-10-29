@@ -1,4 +1,3 @@
-/* Обновлённый styles.css: удалён бейдж на миниатюрах, остальное без изменений */
 :root{
   --bg:#fafafa; --card:#fff; --accent:#2b6cb0; --accent-2:#f6b042; --ok:#2f9e44; --bad:#e53e3e;
 }
@@ -38,17 +37,68 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
 .instructions{margin-top:1rem;font-size:.9rem;color:#555}
 .card-actions{display:flex;gap:.5rem;margin-top:12px}
 
-/* Модал */
+/* Модал и просмотр медиа: ограничение размера до 70% экрана */
 .viewer{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:60}
 .hidden{display:none}
-.viewer-content{background:#fff;padding:1rem 1rem 1.5rem;border-radius:10px;width:min(920px,96%);max-height:90vh;overflow:auto;position:relative}
+.viewer-content{
+  background:#fff;
+  padding:1rem 1rem 1.5rem;
+  border-radius:10px;
+  width:min(920px,96%);
+  max-height:90vh;
+  overflow:auto;
+  position:relative;
+
+  /* ставим флекс‑колонку, чтобы actions могли "прилипать" внизу */
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+/* область с медиа — ограничение по высоте (70vh) и по ширине (70vw) */
+.viewer-media{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#f6f6f6;
+  padding:0.5rem;
+  border-radius:8px;
+
+  /* Ограничиваем контейнер по высоте, чтобы изображение не выталкивало кнопки вниз */
+  max-height:70vh;
+  overflow:hidden;
+}
+
+/* Изображение не больше 70% области экрана */
+.viewer-media img{
+  max-width:70vw;
+  max-height:70vh;
+  width:auto;
+  height:auto;
+  border-radius:6px;
+  display:block;
+  object-fit:contain;
+}
+
+/* Кнопки действий остаются видимыми: при прокрутке они "прилипают" к низу модалки */
+.viewer-actions{
+  position:sticky;
+  bottom:0;
+  display:flex;
+  gap:.5rem;
+  justify-content:flex-end;
+  margin-top:8px;
+  padding-top:8px;
+  /* Небольшой фон, чтобы кнопки были читаемы при скролле */
+  background: linear-gradient(transparent, rgba(255,255,255,0.95));
+}
+
+/* крестик закрытия */
 .viewer-close{position:absolute;right:8px;top:8px;background:transparent;border:0;font-size:28px;color:#666;cursor:pointer}
-.viewer-media{display:flex;align-items:center;justify-content:center;background:#f6f6f6;padding:0.5rem;border-radius:8px}
-.viewer-media img{max-width:100%;height:auto;border-radius:6px;display:block}
+
 .viewer-result{font-weight:700;margin-top:.6rem}
 .viewer-result.ok{color:var(--ok)}
 .viewer-result.bad{color:var(--bad)}
-.viewer-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:8px}
 .btn{padding:.5rem .7rem;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
 .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
@@ -59,4 +109,6 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
   .card{width:100%}
   .map-image{height:560px}
   .hotspot{width:56px;height:56px}
+  .viewer-media{max-height:55vh}
+  .viewer-media img{max-width:88vw; max-height:55vh}
 }
