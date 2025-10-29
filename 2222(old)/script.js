@@ -1,6 +1,10 @@
-// Обновлённый script.js: добавлено автоматическое фокусирование кнопки "Далее" в модалке,
-// при открытии модалки — чтобы не приходилось скроллить, и оставлена прежняя логика отображения.
-// (Остальной код совпадает с последней рабочей версией проекта.)
+// Обновлённый script.js
+// - добавлена поддержка "нулевой" подсказки без миниатюры (noHotspot) с полем audio
+// - play button виден если у текущей подсказки есть audio
+// - если подсказка noHotspot, на карточке показывается "Далее" для перехода
+// - генерация миниатюр пропускает элементы с noHotspot
+// - totalCounter показывает количество кликабельных миниатюр (hotspots)
+// - сохранение прогресса в localStorage остается
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
@@ -89,8 +93,10 @@ async function loadClues(){
     levitanAudio.play().catch(()=>{/* ignore */});
   });
 
+  // при окончании аудио — можно автоматически переходить дальше, если текущая подсказка noHotspot
   levitanAudio.addEventListener('ended', () => {
     if(clues[currentIndex] && clues[currentIndex].noHotspot){
+      // при окончании объявления — перейти дальше автоматически
       advanceStep();
     }
   });
@@ -101,6 +107,7 @@ async function loadClues(){
   });
 
   cardNext.addEventListener('click', () => {
+    // если это подсказка без миниатюры — просто перейти дальше
     advanceStep();
   });
 }
@@ -187,6 +194,7 @@ function updatePlayButtonVisibility(){
   }
 }
 
+// Показывать кнопку "Далее" в карточке, если текущая подсказка noHotspot (а значит переход выполняется вручную)
 function updateCardNextVisibility(c){
   if(c && c.noHotspot){
     cardNext.classList.remove('hidden');
@@ -226,18 +234,7 @@ function handleClick(clickedIndex, btnElement){
 
 function openViewer(){
   viewer.classList.remove('hidden');
-
-  // Дадим браузеру время отрисовать модалку, затем фокусируем кнопку "Далее" (если видна),
-  // иначе фокусируем крестик закрытия — это упрощает взаимодействие клавиатурой
-  setTimeout(()=> {
-    if (!viewer.classList.contains('hidden')) {
-      if (viewerNext && !viewerNext.classList.contains('hidden')) {
-        try { viewerNext.focus(); } catch(e){ viewerClose.focus(); }
-      } else {
-        try { viewerClose.focus(); } catch(e){ /* ignore */ }
-      }
-    }
-  }, 60);
+  viewerClose.focus();
 }
 
 function closeViewer(){

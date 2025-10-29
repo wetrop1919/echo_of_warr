@@ -39,8 +39,6 @@
     </aside>
 
     <section class="map" aria-label="План музея">
-      <h2>План музея — кликните на картинку</h2>
-
       <div class="map-image" id="map-image" tabindex="0" aria-describedby="map-desc">
         <!-- Замените map-plan.jpg на реальный план музея или SVG -->
         <img src="assets/map-plan.jpg" alt="План музея" class="map-bg">
@@ -53,25 +51,8 @@
     </section>
   </main>
 
-  <!-- Модальное окно просмотра -->
-  <div id="viewer" class="viewer hidden" role="dialog" aria-modal="true" aria-labelledby="viewer-title">
-    <div class="viewer-content">
-      <button class="viewer-close" id="viewer-close" aria-label="Закрыть">&times;</button>
-      <h3 id="viewer-title"></h3>
-      <div class="viewer-media">
-        <img id="viewer-img" src="" alt="">
-      </div>
-      <p id="viewer-desc"></p>
-      <div id="viewer-result" class="viewer-result"></div>
-      <div class="viewer-actions">
-        <button id="viewer-next" class="btn primary hidden">Далее</button>
-        <button id="viewer-close-2" class="btn">Закрыть</button>
-      </div>
-    </div>
-  </div>
-
   <footer>
-    <small>Проект-шаблон — заполните реальные фотографии и карту. Подготовлено для конкурса.</small>
+    <!-- футер очищен по запросу -->
   </footer>
 
   <script src="script.js"></script>
