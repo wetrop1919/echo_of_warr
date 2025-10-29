@@ -1,6 +1,5 @@
-// Обновлённый script.js: добавлено автоматическое фокусирование кнопки "Далее" в модалке,
-// при открытии модалки — чтобы не приходилось скроллить, и оставлена прежняя логика отображения.
-// (Остальной код совпадает с последней рабочей версией проекта.)
+// Обновлённый script.js (включая поддержку информационных миниатюр isExtra=true)
+// Вставляйте этот файл вместо старого script.js в проект.
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
@@ -27,7 +26,7 @@ const levitanAudio = document.getElementById('levitan-audio');
 const resetBtn = document.getElementById('reset-progress');
 const cardNext = document.getElementById('card-next');
 
-let hotspotCount = 0; // количество кликабельных миниатюр
+let hotspotCount = 0; // количество кликабельных миниатюр (включая информационные)
 
 async function loadClues(){
   try {
@@ -71,7 +70,7 @@ async function loadClues(){
   }
   currentIndex = startIdx;
 
-  // сгенерируем миниатюры (пропуская noHotspot) и посчитаем их количество
+  // сгенерируем миниатюры (включая isExtra) и посчитаем их количество
   generateHotspotsRandomized();
 
   // отображаем счётчики
@@ -82,11 +81,17 @@ async function loadClues(){
   updatePlayButtonVisibility();
 
   // обработчики кнопок
-  playBtn.addEventListener('click', () => {
-    if(!clues[currentIndex] || !clues[currentIndex].audio) return;
-    levitanAudio.src = clues[currentIndex].audio;
-    levitanAudio.currentTime = 0;
-    levitanAudio.play().catch(()=>{/* ignore */});
+  playBtn.addEventListener('click', async () => {
+    const c = clues[currentIndex];
+    if(!c || !c.audio) return;
+    try {
+      levitanAudio.src = c.audio;
+      levitanAudio.load();
+      await levitanAudio.play();
+    } catch(err){
+      console.error('Ошибка воспроизведения аудио:', err);
+      alert('Не удалось воспроизвести аудио. Откройте консоль для деталей.');
+    }
   });
 
   levitanAudio.addEventListener('ended', () => {
@@ -106,7 +111,7 @@ async function loadClues(){
 }
 
 // Генерация hotspot'ов в случайных позициях (попытка избежать сильных перекрытий)
-// Пропускаются записи с поля noHotspot = true
+// Включает обычные шаги и информационные (isExtra). Пропускает только noHotspot (если указан).
 function generateHotspotsRandomized(){
   // удалить старые
   Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove());
@@ -120,29 +125,35 @@ function generateHotspotsRandomized(){
 
   for(let i=0;i<clues.length;i++){
     const c = clues[i];
-    if(c.noHotspot) continue; // пропускаем нулевые/аудио только подсказки
+    if(c.noHotspot) continue; // полностью невидимые (были случаи для аудио-only); пропускаем
 
     hotspotCount++;
 
-    // попытаться найти позицию, не слишком близко к другим
-    let leftPct, topPct, attempts = 0, ok=false;
-    while(attempts < tryLimit && !ok){
-      leftPct = 6 + Math.random() * 88; // 6%..94% - отступы от краёв
-      topPct = 8 + Math.random() * 78;  // 8%..86%
-      ok = true;
-      for(const p of placed){
-        const dx = Math.abs(p.left - leftPct);
-        const dy = Math.abs(p.top - topPct);
-        if(Math.hypot(dx, dy) < minGap) { ok = false; break; }
+    // Если у записи есть поля left/top — используем их (фиксированная позиция), иначе рандомим
+    let leftPct, topPct;
+    if (c.left && c.top) {
+      leftPct = parseFloat(String(c.left).replace('%',''));
+      topPct = parseFloat(String(c.top).replace('%',''));
+    } else {
+      let attempts = 0, ok=false;
+      while(attempts < tryLimit && !ok){
+        leftPct = 6 + Math.random() * 88; // 6%..94% - отступы от краёв
+        topPct = 8 + Math.random() * 78;  // 8%..86%
+        ok = true;
+        for(const p of placed){
+          const dx = Math.abs(p.left - leftPct);
+          const dy = Math.abs(p.top - topPct);
+          if(Math.hypot(dx, dy) < minGap) { ok = false; break; }
+        }
+        attempts++;
       }
-      attempts++;
     }
     placed.push({ left: leftPct, top: topPct });
 
     const btn = document.createElement('button');
     btn.className = 'hotspot';
     btn.setAttribute('data-index', i);
-    btn.setAttribute('aria-label', c.objectName || `Объект ${i+1}`);
+    btn.setAttribute('aria-label', c.objectName || c.title || `Объект ${i+1}`);
     btn.style.left = `${leftPct.toFixed(2)}%`;
     btn.style.top = `${topPct.toFixed(2)}%`;
 
@@ -199,12 +210,23 @@ function handleClick(clickedIndex, btnElement){
   const current = clues[currentIndex];
   const clicked = clues[clickedIndex];
 
+  // общая информация в модальном окне
   viewerImg.src = clicked.media || clicked.photo || clicked.thumb || 'assets/placeholder-large.jpg';
   viewerImg.alt = clicked.objectName || clicked.title || '';
   viewerTitle.textContent = clicked.objectName || clicked.title || `Объект ${clickedIndex+1}`;
-  // подробный ответ показывается только в модальном окне (viewerDesc)
   viewerDesc.textContent = clicked.descr || clicked.objectDesc || clicked.clue || '';
 
+  // Если это информационный экспонат — просто показать информацию, не менять прогресс
+  if(clicked.isExtra){
+    viewerResult.textContent = ''; // нейтрально
+    viewerResult.className = 'viewer-result';
+    viewerNext.classList.add('hidden');
+    viewerNext.onclick = null;
+    openViewer();
+    return;
+  }
+
+  // обычная логика проверки для игровых шагов
   if(clickedIndex === currentIndex){
     viewerResult.textContent = 'Правильно';
     viewerResult.className = 'viewer-result ok';
@@ -227,8 +249,7 @@ function handleClick(clickedIndex, btnElement){
 function openViewer(){
   viewer.classList.remove('hidden');
 
-  // Дадим браузеру время отрисовать модалку, затем фокусируем кнопку "Далее" (если видна),
-  // иначе фокусируем крестик закрытия — это упрощает взаимодействие клавиатурой
+  // Фокус: если есть кнопка "Далее" — фокусируем её, иначе крестик
   setTimeout(()=> {
     if (!viewer.classList.contains('hidden')) {
       if (viewerNext && !viewerNext.classList.contains('hidden')) {
@@ -253,7 +274,7 @@ function markCompleted(index, btnElement){
 }
 
 function advanceStep(){
-  // Найти следующий непройденный шаг (включая noHotspot-элементы)
+  // Найти следующий непройденный шаг (включая информационные в распределении, но они не считаются пройденными автоматически)
   const nextIndexAfter = clues.findIndex((c, idx) => !savedState.completed.includes(idx) && idx > currentIndex);
   if(nextIndexAfter !== -1){
     currentIndex = nextIndexAfter;
