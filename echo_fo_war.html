@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Эхо войны — интерактивный квест</title>
+  <style>
+    :root{--bg:#f3efe6;--panel:#fff;--accent:#6b2b2b;--muted:#666}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter, "Helvetica Neue", Arial, sans-serif;background:var(--bg);color:#111}
+    header{display:flex;align-items:center;gap:14px;padding:14px 20px;background:#2b2b2b;color:#fff}
+    header h1{margin:0;font-size:18px}
+    .wrap{display:flex;gap:18px;padding:18px}
+    .left{flex:1;min-height:660px;position:relative;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.18)}
+    .museum-bg{width:100%;height:100%;object-fit:cover;display:block}
+    .thumb{position:absolute;display:flex;align-items:center;justify-content:center;width:84px;height:84px;border-radius:8px;overflow:hidden;border:3px solid rgba(255,255,255,0.9);cursor:pointer;transition:transform .18s, box-shadow .18s}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .thumb:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(0,0,0,0.35)}
+    .thumb.locked{filter:grayscale(100%);opacity:0.6}
+    .thumb.correct{outline:4px solid rgba(60,160,80,0.9)}
+    .thumb.wrong{outline:4px solid rgba(180,60,60,0.95)}
+
+    .right{width:420px}
+    .panel{background:var(--panel);padding:16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12)}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .meta .player{font-weight:700}
+    .step-title{font-size:20px;margin:8px 0}
+    .clue{background:linear-gradient(180deg,#fff,#f7f5f2);padding:12px;border-radius:8px;min-height:120px}
+    .actions{display:flex;gap:8px;align-items:center;margin-top:12px}
+    button{background:var(--accent);color:#fff;border:0;padding:10px 12px;border-radius:8px;cursor:pointer}
+    button.secondary{background:#777}
+    .progress{margin-top:12px}
+    progress{width:100%}
+    .small{font-size:13px;color:var(--muted)}
+    .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+    .gallery img{width:100%;height:64px;object-fit:cover;border-radius:6px}
+
+    /* modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:120}
+    .card{background:#fff;padding:18px;border-radius:12px;max-width:820px;width:94%;box-shadow:0 20px 60px rgba(0,0,0,0.45)}
+    .hidden{display:none}
+
+    footer{padding:12px;text-align:center;color:#666;font-size:13px}
+
+    @media(max-width:980px){.wrap{flex-direction:column}.right{width:100%}.left{min-height:480px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div style="width:52px;height:52px;background:#ccc;border-radius:8px;display:flex;align-items:center;justify-content:center">LOGO</div>
+    <div>
+      <h1>Эхо войны — интерактивный квест</h1>
+      <div style="font-size:13px;color:#800000">СШ №12 (г. Могилёв) — музей школы СШ №22, отряда «Славный»</div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="left" id="leftArea">
+      <!-- Замените фон на фото зала музея: ./assets/museum.jpg -->
+      <img id="bg" class="museum-bg" src="assets/museum.jpg" alt="Зал музея"/>
+      <!-- миниатюры экспонатов (расставлены по позиции) -->
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="meta">
+          <div>
+            <div class="small">Участник</div>
+            <div class="player" id="playerName">Гость</div>
+          </div>
+          <div style="text-align:right">
+            <div class="small">Шаг</div>
+            <div id="stepCounter">0 / 20</div>
+          </div>
+        </div>
+
+        <div class="step-title" id="stepTitle">Нажмите «Начать», чтобы получить первое задание</div>
+        <div class="clue" id="clueBox">Задание появится здесь в правой панели. Кликните по миниатюрам на левой панели — правильная миниатюра откроет следующий шаг.</div>
+
+        <div class="actions">
+          <button id="startBtn">Начать</button>
+          <button id="restartBtn" class="secondary">Сбросить</button>
+          <div style="flex:1"></div>
+          <div class="small">Фон: реалистичный музейный зал</div>
+        </div>
+
+        <div class="progress">
+          <progress id="progress" value="0" max="20"></progress>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="small">Галерея экспонатов (можно кликом открыть фото)</div>
+          <div class="gallery" id="gallery"></div>
+        </div>
+
+      </div>
+
+      <div style="height:12px"></div>
+    </div>
+  </div>
+
+  <footer>Прототип для конкурса «80 страниц истории Великой Победы». Для финальной версии — загрузите реальные фото и звуки музея.</footer>
+
+  <!-- модальное окно для финала/фото -->
+  <div id="modal" class="modal hidden">
+    <div class="card" id="modalCard">
+      <div id="modalContent"></div>
+      <div style="text-align:right;margin-top:12px"><button id="closeModal">Закрыть</button></div>
+    </div>
+  </div>
+
+  <!-- аудио (заглушки) -->
+  <audio id="bgMusic" src="assets/bg_music.mp3" loop preload="auto"></audio>
+  <audio id="levitan" src="assets/levitan.mp3" preload="auto"></audio>
+  <audio id="okSound" src="assets/ok.mp3" preload="auto"></audio>
+  <audio id="failSound" src="assets/fail.mp3" preload="auto"></audio>
+
+  <script>
+    // ====== Данные экспонатов и шагов ======
+    // Поменяйте пути, координаты и тексты на реальные данные музея.
+    const steps = [
+	  {id:0, left:'15%', top:'21%', thumb:'assets/_thumb.jpg', media:'assets/.jpg', title:'0-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет, оповестившый 22 Июня 1941 года голосом знаменитого Левитана. О наподении фашисткой Германии на нашу страну.', answer:'кобура', descr:'Кожаная кобура без пистолета.'},
+      {id:1, left:'8%', top:'18%', thumb:'assets/cobura_thumb.jpg', media:'assets/cobura.jpg', title:'1-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет, сделанный из кожи и предназначенный для ношения пистолета.', answer:'кобура', descr:'Кожаная кобура без пистолета.'},
+      {id:2, left:'22%', top:'24%', thumb:'assets/vladimirov_thumb.jpg', media:'assets/vladimirov.jpg', title:'2-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Капитан командовавший обороной Могилёв на линии Гаи-Пашково. Подняв своих подчинённых в последнюю атаку, капитан погиб.', answer:'владимиров', descr:'Тяжело раненный капитан, подняв своих подчинённых в последнюю атаку, погиб. В живых из 250  бойцов осталось только 19 человек. В д. Гаи им  стоит памятник.'},
+      {id:3, left:'36%', top:'26%', thumb:'assets/general_thumb.jpg', media:'assets/general.jpg', title:'3-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Генерал-майор, командовавший обороной Могилёва. Был ранен, схвачен фашистами и замучен в концлагере Хаммельбург.', answer:'генерал Романов', descr:'Генерал-майор Романов, скончался в концлагере Хаммельбург.'},
+      {id:4, left:'50%', top:'22%', thumb:'assets/romanov_thumb.jpg', media:'assets/romanov.jpg', title:'4-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Совецкий офицер, полковник, в годы Великой Отечественной войны участик обороны Могилёва, командира 388-го стрелкового полка.', answer:'кутепов', descr:'Полковник Кутепов, пропавший без вести при обороны Могилёва.'},
+      {id:5, left:'64%', top:'26%', thumb:'assets/planchet_thumb.jpg', media:'assets/planchet.jpg', title:'5-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Этот предмет имеет отношение только к офицерскому составу. Был необходим для хранения документов, карт, карандашей.', answer:'планшет', descr:'Офицерская сумка-планшет.'},
+      {id:6, left:'78%', top:'28%', thumb:'assets/smirnova_thumb.jpg', media:'assets/smirnova.jpg', title:'6-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Найдите портрет Могилёвской подпольщицы которая после войны работала в школе учителем истории СШ №22 г. Могилёва. Она совершила бес примерный подвиг: выкрала карту немецких оборонительных объектов города и через связных передала карту в штаб армии.', answer:'смирнова', descr:'Учитель, участница обороны Могилёва.'},
+      {id:7, left:'12%', top:'46%', thumb:'assets/ptefon_thumb.jpg', media:'assets/patefon.jpg', title:'7-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет который веселил партизан в минуты затишья на фронте.', answer:'патефон', descr:'Патефон.'},
+      {id:8, left:'28%', top:'52%', thumb:'assets/avtomat_thumb.jpg', media:'assets/avtomat.jpg', title:'8-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Трофейный предмет, который тагже помогал приближать  наших бойцов  к Победе.', answer:'автомат', descr:'Немецкий трофейный автомат. Часто бывало что партизаны только такое оружие и имели в своём распоряжении, особенно в начале войны.'},
+      {id:9, left:'44%', top:'48%', thumb:'assets/pachka_thumb.jpg', media:'assets/pechka.jpg', title:'9-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Без этого предмета жизнь партизан была не возможна. Она согревала бойцов, на ней сушили мокрую одежду, готовили еду', answer:'печка', descr:'Печка.'},
+      {id:10, left:'60%', top:'52%', thumb:'assets/shell_thumb.jpg', media:'assets/.jpg', title:'10-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Они летели, взрывались, превращая землю в столб пыли, остовляя после себя огромную воронку и десятки трупов во круг.', answer:'снаряд', descr:'Армейский артиллерийский снаряд.'},
+      {id:11, left:'76%', top:'50%', thumb:'assets/insignia_thumb.jpg', media:'assets/.jpg', title:'11-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Это гордость нашего музея, на ней изображён боевой путь отряда «Славный»', answer:'карта', descr:'боевой путь отряда «Славный».'},
+      {id:12, left:'14%', top:'68%', thumb:'assets/helmet_thumb.jpg', media:'assets/.jpg', title:'12-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Этот головной убор защищал бойцов от пуль и осколков, часто спасая им жизни.', answer:'каска', descr:'Солдатская каска.'},
+      {id:13, left:'30%', top:'70%', thumb:'assets/gas_mask_case_thumb.jpg', media:'assets/.jpg', title:'13-й шаг. Футляр противогаза', clue:'Газбак немецкий для хранения предмета спасающий жизнь в случии химической отаки.', answer:'футляр', descr:'Футляр от немецкого противогаза.'},
+      {id:14, left:'46%', top:'72%', thumb:'assets/radio_thumb.jpg', media:'assets/.jpg', title:'14-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет, служивший средством связи на фронте.', answer:'рация', descr:'Полевой радиопередатчик.'},
+      {id:15, left:'62%', top:'68%', thumb:'assets/primus_thumb.jpg', media:'assets/.jpg', title:'15-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет, не обходимый для приготовление пищи вполевых условиях.', answer:'примус', descr:'Полевая кухонная горелка (примус).'},
+      {id:16, left:'78%', top:'72%', thumb:'assets/church_photo_thumb.jpg', media:'assets/.jpg', title:'16-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Фотография на которой изображена одна из  улица Могилёва в день освобождения 28 июня 1944 г.', answer:'церковь', descr:'Фотография освобождения — церковь.'},
+      {id:17, left:'22%', top:'84%', thumb:'assets/protivogaz_thumb.jpg', media:'assets/.jpg', title:'17-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'В случае химической отаки этот предмет надевали  не только на людей, но и на лошадей.', answer:'противогаз', descr:''},
+      {id:18, left:'40%', top:'82%', thumb:'assets/belt_thumb.jpg', media:'assets/.jpg', title:'18-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет служил не только для поддержки штанов но и для ношения оружия, а иногда идля воспитания детей.', answer:'ремень', descr:'Солдатский ремень.'},
+      {id:19, left:'58%', top:'84%', thumb:'assets/school_uniform_thumb.jpg', media:'assets/.jpg', title:'19-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'После войны дети офицеров могли носить этот предмет в школу, а все им завидовали, потому что знали что их отец командир.', answer:'полевая сумка', descr:'Полевая сумка — признак офицерского сына.'},
+      {id:20, left:'76%', top:'84%', thumb:'assets/trunk_thumb.jpg', media:'assets/.jpg', title:'20-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Солдаты соложили свои вещи в этот предмет, сели в товарные вогоны и с победой отправелись домой.', answer:'чемодан', descr:'Чемодан/сундучок солдата.'}
+    ];
+
+    // ====== State ======
+    let currentIndex = 0; // 0..19
+    let player = {name:'Гость'};
+    const leftArea = document.getElementById('leftArea');
+    const gallery = document.getElementById('gallery');
+    const clueBox = document.getElementById('clueBox');
+    const stepTitle = document.getElementById('stepTitle');
+    const stepCounter = document.getElementById('stepCounter');
+    const progress = document.getElementById('progress');
+
+    // Audio
+    const bgMusic = document.getElementById('bgMusic');
+    const levitan = document.getElementById('levitan');
+    const okSound = document.getElementById('okSound');
+    const failSound = document.getElementById('failSound');
+
+    // Создаём миниатюры на карте
+    steps.forEach((s, idx)=>{
+      const el = document.createElement('button');
+      el.className = 'thumb locked';
+      el.style.left = s.left;
+      el.style.top = s.top;
+      el.dataset.index = idx;
+      el.title = s.title;
+      el.innerHTML = `<img src="${s.thumb}" alt="${s.title}"/>`;
+
+      el.addEventListener('click', (e)=>{ onThumbClick(idx, el); });
+      leftArea.appendChild(el);
+
+      // gallery
+      const g = document.createElement('img');
+      g.src = s.thumb;
+      g.alt = s.title;
+      g.title = s.title;
+      g.addEventListener('click', ()=>{ showModal(`<h3>${s.title}</h3><img src='${s.media}' style='max-width:100%;border-radius:6px;margin-top:8px'/><p style='margin-top:8px'>${s.descr}</p>`); });
+      gallery.appendChild(g);
+    });
+
+    // UI кнопки
+    document.getElementById('startBtn').addEventListener('click', ()=>{
+      player.name = prompt('Введите имя участника (для сертификата):','') || 'Гость';
+      document.getElementById('playerName').textContent = player.name;
+      startGame();
+    });
+    document.getElementById('restartBtn').addEventListener('click', ()=>{ if(confirm('Сбросить прогресс и начать заново?')) resetGame(); });
+    document.getElementById('closeModal').addEventListener('click', ()=>{ closeModal(); });
+
+    function startGame(){
+      currentIndex = 0;
+      // play levitan once at start
+      playAudio(levitan);
+      setTimeout(()=>{ bgMusic.volume = 0.25; playAudio(bgMusic); }, 1500);
+      updateStep();
+      unlockAllThumbs();
+    }
+
+    function resetGame(){
+      currentIndex = 0; updateStep(); document.querySelectorAll('.thumb').forEach(t=>{ t.classList.remove('correct','wrong'); t.classList.add('locked'); });
+      bgMusic.pause(); levitan.pause(); okSound.pause(); failSound.pause(); bgMusic.currentTime=0; levitan.currentTime=0;
+    }
+
+    function updateStep(){
+      const s = steps[currentIndex];
+      stepTitle.textContent = s ? s.title : 'Все шаги пройдены';
+      clueBox.innerHTML = s ? `<b>Подсказка:</b><div style='margin-top:8px'>${s.clue}</div>` : 'Поздравляем — вы прошли все шаги!';
+      stepCounter.textContent = `${Math.min(currentIndex,20)} / 20`;
+      progress.value = currentIndex;
+    }
+
+    function unlockAllThumbs(){
+      document.querySelectorAll('.thumb').forEach(t=>t.classList.remove('locked'));
+    }
+
+    function onThumbClick(idx, el){
+      const s = steps[currentIndex];
+      // если уже все пройдены — покажем фото
+      if(currentIndex >= steps.length){ showModal(`<h3>Победа!</h3><p>Вы прошли все шаги.</p><p>Участник: ${player.name}</p>`); return; }
+      // проверка: кликнули по правильной миниатюре (текущая цель)
+      if(idx === currentIndex){
+        el.classList.remove('wrong'); el.classList.add('correct');
+        playAudio(okSound);
+        // показать краткое описание и перейти далее через паузу
+        showToast(`Верно! ${s.descr}`);
+        currentIndex++;
+        setTimeout(()=>{ if(currentIndex < steps.length){ updateStep(); } else { finishGame(); } }, 1200);
+      } else {
+        // неверная
+        el.classList.remove('correct'); el.classList.add('wrong');
+        playAudio(failSound);
+        showToast('Неправильно. Попробуйте ещё.');
+      }
+    }
+
+    function finishGame(){
+      updateStep();
+      playAudio(okSound);
+      setTimeout(()=>{
+        showModal(`<h2>Поздравляем — вы дошли до Победы!</h2><p>Участник: ${player.name}</p><p>Вы успешно прошли все ${steps.length} шагов к Победе.</p><div style='margin-top:8px'><button id='viewAll'>Посмотреть все экспонаты</button> <button id='tryAgain' style='margin-left:8px'>Пройти снова</button></div>`);
+        document.getElementById('viewAll').addEventListener('click', ()=>{ showAllExhibits(); });
+        document.getElementById('tryAgain').addEventListener('click', ()=>{ closeModal(); resetGame(); startGame(); });
+      }, 800);
+    }
+
+    // Простое модальное
+    function showModal(html){ document.getElementById('modalContent').innerHTML = html; document.getElementById('modal').classList.remove('hidden'); }
+    function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
+
+    // показать все экспонаты в модальном окне
+    function showAllExhibits(){
+      let html = '<h3>Все экспонаты</h3><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px">';
+      steps.forEach(s=>{ html += `<div style="text-align:center"><img src='${s.media}' style='width:100%;height:80px;object-fit:cover;border-radius:6px'/><div style='font-size:13px;margin-top:6px'>${s.title}</div></div>`; });
+      html += '</div>';
+      showModal(html);
+    }
+
+    // toast
+    let toastTimer = null;
+    function showToast(text){
+      // простой временный блок в правой панели
+      const prev = document.getElementById('toast'); if(prev) prev.remove();
+      const div = document.createElement('div'); div.id='toast'; div.style.position='absolute'; div.style.right='26px'; div.style.top='90px'; div.style.background='rgba(40,40,40,0.9)'; div.style.color='#fff'; div.style.padding='10px 14px'; div.style.borderRadius='8px'; div.style.zIndex=200; div.textContent = text; document.body.appendChild(div);
+      if(toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(()=>{ div.remove(); },2200);
+    }
+
+    function playAudio(a){ try{ if(!a) return; a.currentTime = 0; a.play().catch(e=>{/* muted or blocked by browser */}); }catch(e){}
+    }
+
+    // Инициализация интерфейса
+    updateStep();
+
+  </script>
+</body>
+</html>

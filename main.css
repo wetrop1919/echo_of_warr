@@ -1,0 +1,146 @@
+/* Сброс стилей */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Основное оформление */
+body, html {
+  height: 100%;
+  font-family: Arial, sans-serif;
+  color: white;
+}
+
+/* Фон на весь экран */
+.background {
+  background-image: url('background.jpg'); /* если нет картинки — поставь свою */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  height: 100vh;
+  width: 100%;
+  position: relative;
+}
+
+/* Центральный текст */
+.center-text {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -30%);
+  text-align: center;
+}
+
+.center-text h1 {
+  font-size: 3em;
+  margin-bottom: 0.5em;
+}
+
+.center-text p {
+  font-size: 1.2em;
+  margin-bottom: 1em;
+}
+
+/* Кнопка "Начать" */
+.start-btn {
+  display: inline-block;
+  padding: 0.8em 2em;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #000;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.start-btn:hover { background-color: #fff; }
+
+/* Боковой текст справа — контейнер */
+.side-text {
+  position: absolute;
+  top: 50%;
+  right: 5%;
+  transform: translateY(-50%);
+  width: 320px;
+  height: 220px; /* видимая часть */
+  background-color: rgba(0, 0, 0, 0.55);
+  border-radius: 10px;
+  padding: 1em;
+  box-sizing: border-box;
+  overflow: hidden; /* оставляем, чтобы по умолчанию было компактно */
+  transition: height 0.45s ease;
+}
+
+/* Внутренний скроллируемый блок с текстом */
+.side-text .side-text-inner {
+  height: calc(100% - 48px); /* оставляем место для кнопки (примерно 48px) */
+  overflow: hidden; /* по умолчанию показываем только верх */
+  padding-right: 0.25em;
+}
+
+/* Когда раскрыто — делаем внутренний блок прокручиваемым */
+.side-text.expanded {
+  height: auto;
+  max-height: 80vh;
+}
+
+.side-text.expanded .side-text-inner {
+  overflow-y: auto;
+  height: calc(80vh - 60px);
+}
+
+/* Параметры параграфа */
+.side-text p {
+  line-height: 1.45;
+  text-align: right;
+  font-size: 0.98em;
+  margin: 0;
+}
+
+/* Кнопка "Читать дальше" — всегда внизу блока */
+.read-more {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.9);
+  color: #000;
+  border: none;
+  padding: 0.45em 0.9em;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  z-index: 20;
+  transition: background 0.15s;
+}
+
+.read-more:hover { background-color: #fff; }
+
+/* Кнопка снизу справа */
+.about-btn {
+  position: absolute;
+  bottom: 5%;
+  right: 5%;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #000;
+  padding: 0.6em 1.5em;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.about-btn:hover { background-color: #fff; }
+
+/* Небольшая адаптация под мобильные экраны */
+@media (max-width: 640px) {
+  .side-text {
+    right: 3%;
+    width: 85%;
+    left: 7.5%;
+    transform: translateY(-45%);
+  }
+  .center-text h1 { font-size: 2em; }
+  .center-text p { font-size: 1em; }
+}
