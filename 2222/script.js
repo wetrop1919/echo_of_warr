@@ -1,4 +1,9 @@
-// Динамическая генерация hotspot'ов, сохранение прогресса и аудио для первого шага
+// Обновлённый script.js
+//  - в карточке показываем только подсказку (clue), подробный ответ только в модальном окне
+//  - номера на миниатюрах убраны
+//  - миниатюры размещаются хаотично при загрузке (случайные координаты, попытка уменьшить перекрытие)
+// Сохранение прогресса и аудио для первого шага остаются.
+
 const STORAGE_KEY = 'warquest_progress_v1';
 
 let clues = [];
@@ -25,102 +30,109 @@ const resetBtn = document.getElementById('reset-progress');
 
 async function loadClues(){
   try {
-    const res = await fetch('data/clues.json');
+    const res = await fetch('data/clues.json', { cache: 'no-store' });
+    if(!res.ok){
+      stepTitle.textContent = 'Ошибка загрузки';
+      stepText.textContent = `HTTP ${res.status} ${res.statusText} при запросе data/clues.json`;
+      return;
+    }
     clues = await res.json();
   } catch(e){
-    console.error('Не удалось загрузить data/clues.json', e);
+    console.error('Ошибка при загрузке подсказок', e);
     stepTitle.textContent = 'Ошибка загрузки';
-    stepText.textContent = 'Невозможно загрузить подсказки.';
+    stepText.textContent = 'Невозможно загрузить подсказки. Убедитесь, что site запущен через http(s) и файл data/clues.json доступен.';
     return;
   }
 
   if(!Array.isArray(clues) || clues.length === 0){
     stepTitle.textContent = 'Нет подсказок';
-    stepText.textContent = 'Файл data/clues.json пуст или не загружен.';
+    stepText.textContent = 'Файл data/clues.json пуст или содержит неверную структуру.';
     return;
   }
 
-  // загрузить состояние из localStorage (если есть)
+  // восстановление прогресса
   const raw = localStorage.getItem(STORAGE_KEY);
   if(raw){
     try {
       const parsed = JSON.parse(raw);
-      if(parsed && Array.isArray(parsed.completed)){
-        savedState = parsed;
-      }
-    } catch(e){ console.warn('Неверный формат сохранённого прогресса', e); }
+      if(parsed && Array.isArray(parsed.completed)) savedState = parsed;
+    } catch(e){ console.warn('Неверный формат savedState', e); }
   }
 
-  // если savedState.currentIndex указывает на пройденный шаг, найдём следующий непройденный
   if(savedState.currentIndex >= clues.length) savedState.currentIndex = 0;
-  let startIdx = savedState.currentIndex;
-  if(savedState.completed.includes(startIdx)){
+
+  // найти стартовый индекс (первый непройденный, если сохранённый пройден)
+  let startIdx = savedState.currentIndex || 0;
+  if(savedState.completed && savedState.completed.includes(startIdx)){
     const next = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
     if(next !== -1) startIdx = next;
-    else startIdx = clues.length - 1; // все пройдены
+    else startIdx = clues.length - 1;
   }
   currentIndex = startIdx;
 
-  // отображаем количество и количество пройденных
   totalCounter.textContent = clues.length;
-  completedCounter.textContent = savedState.completed.length;
+  completedCounter.textContent = savedState.completed ? savedState.completed.length : 0;
 
-  // сгенерируем hotspot'ы
-  generateHotspots();
+  generateHotspotsRandomized();
 
-  // отобразим текущий шаг
   renderStep();
-
-  // показать/скрыть кнопку прослушивания объявления
   updatePlayButtonVisibility();
 
-  // обработчик кнопок
+  // обработчики кнопок
   playBtn.addEventListener('click', () => {
-    // воспроизвести аудио (пользовательский клик разрешает воспроизведение)
     levitanAudio.currentTime = 0;
-    levitanAudio.play().catch(()=> {
-      // браузер мог запретить автоматическое воспроизведение; просто проигнорируем
-    });
+    levitanAudio.play().catch(()=>{/* ignore */});
   });
-
   resetBtn.addEventListener('click', () => {
-    if(!confirm('Сбросить прогресс? Это удалит все отмеченные шаги и начнёт квест заново.')) return;
+    if(!confirm('Сбросить прогресс?')) return;
     resetProgress();
   });
 }
 
-function generateHotspots(){
-  // очистим старые hotspot'ы, если есть
+// Генерация hotspot'ов в случайных позициях (попытка избежать сильных перекрытий)
+function generateHotspotsRandomized(){
+  // удалить старые
   Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove());
 
+  const placed = [];
   const frag = document.createDocumentFragment();
-  clues.forEach((c, i) => {
+  const tryLimit = 40;
+  const minGap = 8; // минимальное расстояние в % между центрами (приблизительно)
+
+  for(let i=0;i<clues.length;i++){
+    const c = clues[i];
+    // попытаться найти позицию, не слишком близко к другим
+    let leftPct, topPct, attempts = 0, ok=false;
+    while(attempts < tryLimit && !ok){
+      leftPct = 6 + Math.random() * 88; // 6%..94% - отступы от краёв
+      topPct = 8 + Math.random() * 78;  // 8%..86%
+      ok = true;
+      for(const p of placed){
+        const dx = Math.abs(p.left - leftPct);
+        const dy = Math.abs(p.top - topPct);
+        // простая эвристика расстояния
+        if(Math.hypot(dx, dy) < minGap) { ok = false; break; }
+      }
+      attempts++;
+    }
+    // если не получилось найти непересекаемую позицию — оставляем последнюю
+    placed.push({ left: leftPct, top: topPct });
+
     const btn = document.createElement('button');
     btn.className = 'hotspot';
     btn.setAttribute('data-index', i);
     btn.setAttribute('aria-label', c.objectName || `Объект ${i+1}`);
-    // позиционирование (left/top приходят как проценты)
-    if (c.left) btn.style.left = c.left;
-    if (c.top) btn.style.top = c.top;
+    btn.style.left = `${leftPct.toFixed(2)}%`;
+    btn.style.top = `${topPct.toFixed(2)}%`;
 
     const img = document.createElement('img');
     img.src = c.thumb || c.media || c.photo || 'assets/placeholder.jpg';
     img.alt = c.objectName || c.title || `миниатюра ${i+1}`;
 
-    // бейдж с номером шага (чтобы удобно ориентироваться)
-    const badge = document.createElement('span');
-    badge.className = 'badge';
-    badge.textContent = (i + 1);
-
     btn.appendChild(img);
-    btn.appendChild(badge);
 
-    // если уже пройдено — отметить
-    if(savedState.completed.includes(i)){
-      btn.classList.add('completed');
-    }
+    if(savedState.completed && savedState.completed.includes(i)) btn.classList.add('completed');
 
-    // обработчик клика
     btn.addEventListener('click', (ev) => {
       ev.preventDefault();
       const clickedIndex = Number(btn.dataset.index);
@@ -128,7 +140,7 @@ function generateHotspots(){
     });
 
     frag.appendChild(btn);
-  });
+  }
 
   mapImage.appendChild(frag);
 }
@@ -136,39 +148,29 @@ function generateHotspots(){
 function renderStep(){
   const c = clues[currentIndex];
   stepTitle.textContent = c.title || `Шаг ${currentIndex+1}`;
-  // показать подсказку (clue)
   const clueText = c.clue || c.text || '';
-  const descrText = c.descr || c.objectDesc || '';
-  stepText.innerHTML = `<strong>Подсказка:</strong> ${escapeHtml(clueText)}<br><em style="color:#666">${escapeHtml(descrText)}</em>`;
-
+  // Показываем только подсказку: подробный ответ (descr) убран из карточки
+  stepText.innerHTML = `<strong>Подсказка:</strong> ${escapeHtml(clueText)}`;
   updatePlayButtonVisibility();
 }
 
-// Показывать кнопку прослушивания объявления только на первом шаге (index 0)
 function updatePlayButtonVisibility(){
-  if(currentIndex === 0){
-    playBtn.style.display = '';
-  } else {
-    playBtn.style.display = 'none';
-  }
+  playBtn.style.display = (currentIndex === 0) ? '' : 'none';
 }
 
-// Обработка клика по миниатюре
 function handleClick(clickedIndex, btnElement){
   const current = clues[currentIndex];
   const clicked = clues[clickedIndex];
 
-  // Показать большое изображение и описание в модальном окне
   viewerImg.src = clicked.media || clicked.photo || clicked.thumb || 'assets/placeholder-large.jpg';
   viewerImg.alt = clicked.objectName || clicked.title || '';
   viewerTitle.textContent = clicked.objectName || clicked.title || `Объект ${clickedIndex+1}`;
+  // подробный ответ показывается только в модальном окне (viewerDesc)
   viewerDesc.textContent = clicked.descr || clicked.objectDesc || clicked.clue || '';
 
-  // Проверка на правильность: правильным считается нажатие по объекту, соответствующему текущей подсказке
-  if (clickedIndex === currentIndex) {
+  if(clickedIndex === currentIndex){
     viewerResult.textContent = 'Правильно';
     viewerResult.className = 'viewer-result ok';
-    // покажем кнопку "Далее"
     viewerNext.classList.remove('hidden');
     viewerNext.onclick = () => {
       markCompleted(clickedIndex, btnElement);
@@ -194,33 +196,21 @@ function closeViewer(){
   viewer.classList.add('hidden');
 }
 
-// Отметить объект как пройденный (визуально) и сохранить прогресс
 function markCompleted(index, btnElement){
   const btn = btnElement || document.querySelector(`.hotspot[data-index="${index}"]`);
   if(btn) btn.classList.add('completed');
-
-  if(!savedState.completed.includes(index)){
-    savedState.completed.push(index);
-  }
-
-  // обновить счётчик
+  if(!savedState.completed.includes(index)) savedState.completed.push(index);
   completedCounter.textContent = savedState.completed.length;
-
-  // сохранить
   saveState();
 }
 
 function advanceStep(){
-  // Найти следующий непройденный шаг
   const nextIndex = clues.findIndex((c, idx) => !savedState.completed.includes(idx) && idx > currentIndex);
-  if(nextIndex !== -1){
-    currentIndex = nextIndex;
-  } else {
-    // если нет после текущего, найти любой непройденный
+  if(nextIndex !== -1) currentIndex = nextIndex;
+  else {
     const any = clues.findIndex((c, idx) => !savedState.completed.includes(idx));
     if(any !== -1) currentIndex = any;
     else {
-      // все пройдены — финал
       stepTitle.textContent = 'Победа!';
       stepText.innerHTML = 'Вы успешно прошли квест. Поздравляем!';
       savedState.currentIndex = clues.length - 1;
@@ -229,40 +219,30 @@ function advanceStep(){
       return;
     }
   }
-
   savedState.currentIndex = currentIndex;
   saveState();
   renderStep();
 }
 
-// Сохранение состояния в localStorage
 function saveState(){
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(savedState));
-  } catch(e){
-    console.warn('Не удалось сохранить прогресс', e);
-  }
+  } catch(e){ console.warn('Не удалось сохранить прогресс', e); }
 }
 
-// Сброс прогресса
 function resetProgress(){
   savedState = { currentIndex: 0, completed: [] };
   saveState();
-  // убрать классы completed визуально
   document.querySelectorAll('.hotspot.completed').forEach(n => n.classList.remove('completed'));
   completedCounter.textContent = 0;
   currentIndex = 0;
   renderStep();
 }
 
-// Закрытие модалки кнопками
 viewerClose.addEventListener('click', closeViewer);
 viewerClose2.addEventListener('click', closeViewer);
-window.addEventListener('keydown', (e) => {
-  if(e.key === 'Escape') closeViewer();
-});
+window.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeViewer(); });
 
-// Простая защита от XSS в выводе подсказки/описания
 function escapeHtml(str){
   if(!str) return '';
   return String(str)
@@ -273,5 +253,5 @@ function escapeHtml(str){
     .replaceAll("'",'&#39;');
 }
 
-// Загрузка данных
+// Запуск
 loadClues();
