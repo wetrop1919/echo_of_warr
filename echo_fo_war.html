@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Эхо войны — интерактивный квест</title>
   <style>
-    :root{--bg:#f3efe6;--panel:#fff;--accent:#6b2b2b;--muted:#666}
+    :root{--bg:#f3efe6;--panel:#fff;--accent:#6b2b2b;--muted:#677}
     *{box-sizing:border-box}
     body{margin:0;font-family:Inter, "Helvetica Neue", Arial, sans-serif;background:var(--bg);color:#111}
     header{display:flex;align-items:center;gap:14px;padding:14px 20px;background:#2b2b2b;color:#fff}
@@ -47,22 +47,16 @@
 </head>
 <body>
   <header>
-    <div style="width:52px;height:52px;background:#ccc;border-radius:8px;display:flex;align-items:center;justify-content:center">LOGO</div>
+    
     <div>
-<<<<<<< HEAD
       <h1>Эхо войны — интерактивный квест</h1>
-      <div style="font-size:13px;color:#b9b9b9">СШ №12 (г. Могилёв) — музей школы СШ №22, отряда «Славный»</div>
-=======
-      <h1>Эхо войны — интерактивный квест.</h1>
-      <div style="font-size:13px;color:#800000">СШ №12 (г. Могилёв) — музей школы СШ №22, отряда «Славный»</div>
->>>>>>> f01f36fea32a10f916142cd205e6eb6e16396995
+     <!-- <div style="font-size:16px;color:#b9b9b9">СШ №12 (г. Могилёв) — музей школы СШ №22, отряда «Славный»</div> -->
     </div>
   </header>
 
   <div class="wrap">
     <div class="left" id="leftArea">
-      <!-- Замените фон на фото зала музея: ./assets/museum.jpg -->
-      <img id="bg" class="museum-bg" src="assets/museum.jpg" alt="Зал музея"/>
+      <img id="bg" class="museum-bg" src="assets/map.jpg" alt="Зал музея"/>
       <!-- миниатюры экспонатов (расставлены по позиции) -->
     </div>
 
@@ -75,7 +69,7 @@
           </div>
           <div style="text-align:right">
             <div class="small">Шаг</div>
-            <div id="stepCounter">0 / 20</div>
+            <div id="stepCounter">1 / 20</div>
           </div>
         </div>
 
@@ -86,11 +80,11 @@
           <button id="startBtn">Начать</button>
           <button id="restartBtn" class="secondary">Сбросить</button>
           <div style="flex:1"></div>
-          <div class="small">Фон: реалистичный музейный зал</div>
+          <!-- <div class="small">Фон: реалистичный музейный зал</div> -->
         </div>
 
         <div class="progress">
-          <progress id="progress" value="0" max="20"></progress>
+          <progress id="progress" value="1" max="21"></progress>
         </div>
 
         <div style="margin-top:12px">
@@ -103,8 +97,6 @@
       <div style="height:12px"></div>
     </div>
   </div>
-
-  <footer>Прототип для конкурса «80 страниц истории Великой Победы». Для финальной версии — загрузите реальные фото и звуки музея.</footer>
 
   <!-- модальное окно для финала/фото -->
   <div id="modal" class="modal hidden">
@@ -122,9 +114,9 @@
 
   <script>
     // ====== Данные экспонатов и шагов ======
-    // Поменяйте пути, координаты и тексты на реальные данные музея.
+    
     const steps = [
-	  {id:1, left:'15%', top:'21%', thumb:'assets/_thumb.jpg', media:'assets/.jpg', title:'0-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет, оповестившый 22 Июня 1941 года голосом знаменитого Левитана о наподении фашисткой Германии на нашу страну.', answer:'кобура', descr:'Кожаная кобура без пистолета.'},
+	  {id:1, left:'1%', top:'1%', thumb:'assets/reproduktor_thumb.jpg', media:'assets/reproduktor.jpg', title:'0-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет, оповестившый 22 Июня 1941 года голосом знаменитого Левитана о наподении фашисткой Германии на нашу страну.', answer:'кобура', descr:'Кожаная кобура без пистолета.'},
       {id:2, left:'8%', top:'18%', thumb:'assets/cobura_thumb.jpg', media:'assets/cobura.jpg', title:'1-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Предмет, сделанный из кожи и предназначенный для ношения пистолета.', answer:'кобура', descr:'Кожаная кобура без пистолета.'},
       {id:3, left:'22%', top:'24%', thumb:'assets/vladimirov_thumb.jpg', media:'assets/vladimirov.jpg', title:'2-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Капитан командовавший обороной Могилёв на линии Гаи-Пашково. Подняв своих подчинённых в последнюю атаку, капитан погиб.', answer:'владимиров', descr:'Тяжело раненный капитан, подняв своих подчинённых в последнюю атаку, погиб. В живых из 250  бойцов осталось только 19 человек. В д. Гаи им  стоит памятник.'},
       {id:4, left:'36%', top:'26%', thumb:'assets/general_thumb.jpg', media:'assets/general.jpg', title:'3-й шаг. Найдите ответ на фото музея и нажмите на него.', clue:'Генерал-майор, командовавший обороной Могилёва. Был ранен, схвачен фашистами и замучен в концлагере Хаммельбург.', answer:'генерал Романов', descr:'Генерал-майор Романов, скончался в концлагере Хаммельбург.'},
