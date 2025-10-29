@@ -1,4 +1,4 @@
-/* Сброс стилей */
+/* Сброс базовых стилей */
 * {
   margin: 0;
   padding: 0;
@@ -11,16 +11,45 @@ body, html {
   font-family: Arial, sans-serif;
   color: white;
 }
+body {
+  background: red;
+}
 
-/* Фон на весь экран */
+/* Фон */
 .background {
-  background-image: url('background.jpg'); /* если нет картинки — поставь свою */
+  background-image: url('background.jpg'); /* замени на своё фото */
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   height: 100vh;
   width: 100%;
   position: relative;
+  overflow: hidden;
+}
+
+/* 🔹 Бегущая строка сверху */
+.marquee {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.09);
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 8px 0;
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.marquee span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: scroll 35s linear infinite;
+}
+
+@keyframes scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
 }
 
 /* Центральный текст */
@@ -38,7 +67,7 @@ body, html {
 }
 
 .center-text p {
-  font-size: 1.2em;
+  font-size: 1.5em;
   margin-bottom: 1em;
 }
 
@@ -46,101 +75,60 @@ body, html {
 .start-btn {
   display: inline-block;
   padding: 0.8em 2em;
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.8);
   color: #000;
   text-decoration: none;
   border-radius: 8px;
   font-weight: bold;
-  transition: background 0.2s;
+  transition: background 0.3s;
 }
 
-.start-btn:hover { background-color: #fff; }
+.start-btn:hover {
+  background-color: #fff;
+}
 
-/* Боковой текст справа — контейнер */
+/* Текст справа */
 .side-text {
   position: absolute;
   top: 50%;
   right: 5%;
   transform: translateY(-50%);
-  width: 320px;
-  height: 220px; /* видимая часть */
-  background-color: rgba(0, 0, 0, 0.55);
-  border-radius: 10px;
-  padding: 1em;
-  box-sizing: border-box;
-  overflow: hidden; /* оставляем, чтобы по умолчанию было компактно */
-  transition: height 0.45s ease;
-}
-
-/* Внутренний скроллируемый блок с текстом */
-.side-text .side-text-inner {
-  height: calc(100% - 48px); /* оставляем место для кнопки (примерно 48px) */
-  overflow: hidden; /* по умолчанию показываем только верх */
-  padding-right: 0.25em;
-}
-
-/* Когда раскрыто — делаем внутренний блок прокручиваемым */
-.side-text.expanded {
-  height: auto;
-  max-height: 80vh;
-}
-
-.side-text.expanded .side-text-inner {
-  overflow-y: auto;
-  height: calc(80vh - 60px);
-}
-
-/* Параметры параграфа */
-.side-text p {
-  line-height: 1.45;
+  max-width: 300px;
+  font-size: 1.2em;
+  line-height: 1.4;
   text-align: right;
-  font-size: 0.98em;
-  margin: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 1em;
+  border-radius: 10px;
 }
 
-/* Кнопка "Читать дальше" — всегда внизу блока */
-.read-more {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.9);
-  color: #000;
-  border: none;
-  padding: 0.45em 0.9em;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
-  z-index: 20;
-  transition: background 0.15s;
-}
-
-.read-more:hover { background-color: #fff; }
-
-/* Кнопка снизу справа */
+/* Кнопка "О проекте" */
 .about-btn {
   position: absolute;
   bottom: 5%;
   right: 5%;
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.8);
   color: #000;
   padding: 0.6em 1.5em;
   text-decoration: none;
   border-radius: 8px;
   font-weight: bold;
-  transition: background 0.2s;
+  transition: background 0.3s;
 }
 
-.about-btn:hover { background-color: #fff; }
+.about-btn:hover {
+  background-color: #fff;
+}
 
-/* Небольшая адаптация под мобильные экраны */
-@media (max-width: 640px) {
-  .side-text {
-    right: 3%;
-    width: 85%;
-    left: 7.5%;
-    transform: translateY(-45%);
-  }
-  .center-text h1 { font-size: 2em; }
-  .center-text p { font-size: 1em; }
+/* Текст внизу */
+.bottom-text {
+  position: absolute;
+  bottom: 2%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 0.5em 1.5em;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1em;
 }
