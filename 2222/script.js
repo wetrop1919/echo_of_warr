@@ -1,5 +1,6 @@
-// script.js — отказоустойчивая версия с диагностикой и исправленной логикой подсчёта игровых шагов
-// Замените полностью текущий script.js на этот файл.
+// Обновлённый script.js — добавлена делегация кликов по карте и дополнительные лог‑сообщения,
+// чтобы клики по миниатюрам всегда попадали в обработчик (устраняет ситуацию когда клики "ничего не делают").
+// Остальная логика сохранена.
 
 const STORAGE_KEY = 'warquest_progress_v1';
 
@@ -39,13 +40,8 @@ function showErrorInUI(title, details) {
   }
 }
 
-// Основная функция загрузки подсказок
 async function loadClues() {
   try {
-    if (!stepTitle || !stepText || !mapImage || !completedCounter || !totalCounter) {
-      console.warn('Некоторые элементы DOM не найдены, отладочные данные в консоли.');
-    }
-
     stepTitle && (stepTitle.textContent = 'Загрузка...');
     stepText && (stepText.textContent = 'Загружаю подсказки...');
 
@@ -72,7 +68,6 @@ async function loadClues() {
     }
 
     console.info('clues загружены, элементов:', clues.length);
-    console.log('Первые элементы:', clues.slice(0,3));
 
     // Восстановление прогресса из localStorage
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -98,10 +93,8 @@ async function loadClues() {
     // Вычисляем стартовый текущий индекс
     let startIdx = savedState.currentIndex || 0;
     if (!clues[startIdx] || clues[startIdx].isExtra || clues[startIdx].noHotspot) {
-      // если savedState указывает на неигровой индекс — найдём ближайший игровой
       startIdx = gameIndexes.find(idx => idx >= (savedState.currentIndex || 0)) ?? gameIndexes[0] ?? 0;
     }
-    // если уже пройден — найдём первый непройденный игровой
     if (savedState.completed && savedState.completed.includes(startIdx)) {
       const nextGame = gameIndexes.find(idx => !savedState.completed.includes(idx));
       if (typeof nextGame !== 'undefined') startIdx = nextGame;
@@ -118,9 +111,30 @@ async function loadClues() {
     renderStep();
     attachUIHandlers();
 
+    // Добавляем делегированный обработчик кликов по карте (на случай наложений и нестандартного DOM)
+    if (mapImage) {
+      // remove previous to avoid double-binding
+      mapImage.removeEventListener('click', mapClickHandler);
+      mapImage.addEventListener('click', mapClickHandler);
+    }
+
   } catch (err) {
     console.error('Ошибка в loadClues:', err);
     showErrorInUI('Ошибка при инициализации', err && err.message ? err.message : String(err));
+  }
+}
+
+function mapClickHandler(e){
+  try {
+    // ищем ближайшую кнопку .hotspot от целевого элемента
+    const btn = e.target.closest && e.target.closest('.hotspot');
+    if (!btn) return;
+    // защита: dataset может быть строкой
+    const clickedIndex = Number(btn.getAttribute('data-index'));
+    console.log('mapImage click -> hotspot index', clickedIndex);
+    handleClick(clickedIndex, btn);
+  } catch (err) {
+    console.error('Ошибка в mapClickHandler:', err);
   }
 }
 
@@ -151,6 +165,7 @@ function attachUIHandlers() {
     }
     if (viewerClose) viewerClose.onclick = closeViewer;
     if (viewerClose2) viewerClose2.onclick = closeViewer;
+    // клавиатура - ESC
     window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeViewer(); });
   } catch (e) {
     console.warn('Не удалось навесить некоторые UI обработчики', e);
@@ -160,7 +175,9 @@ function attachUIHandlers() {
 // Генерация hotspot'ов
 function generateHotspotsRandomized() {
   try {
-    Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove());
+    if (mapImage) {
+      Array.from(mapImage.querySelectorAll('.hotspot')).forEach(n => n.remove());
+    }
   } catch (e) {
     console.warn('mapImage возможно отсутствует в DOM', e);
   }
@@ -205,6 +222,7 @@ function generateHotspotsRandomized() {
     btn.setAttribute('aria-label', c.objectName || c.title || `Объект ${i+1}`);
     btn.style.left = `${leftPct.toFixed(2)}%`;
     btn.style.top = `${topPct.toFixed(2)}%`;
+    btn.style.zIndex = 5;
 
     const img = document.createElement('img');
     img.src = c.thumb || c.media || c.photo || 'assets/placeholder.jpg';
@@ -214,17 +232,23 @@ function generateHotspotsRandomized() {
 
     if (savedState.completed && savedState.completed.includes(i)) btn.classList.add('completed');
 
+    // дополнительно: навесим обработчик на саму кнопке (делегация выше — запасной вариант)
     btn.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      const clickedIndex = Number(btn.dataset.index);
-      handleClick(clickedIndex, btn);
+      try {
+        ev.preventDefault();
+        const clickedIndex = Number(btn.getAttribute('data-index'));
+        console.log('hotspot direct click ->', clickedIndex);
+        handleClick(clickedIndex, btn);
+      } catch (e) {
+        console.error('Ошибка в обработчике прямого клика по hotspot', e);
+      }
     });
 
     frag.appendChild(btn);
   }
 
   try {
-    mapImage.appendChild(frag);
+    mapImage && mapImage.appendChild(frag);
   } catch (e) {
     console.error('Не удалось добавить hotspots на карту', e);
     showErrorInUI('Ошибка отображения карты', 'Проверьте, что элемент с id="map-image" присутствует в разметке.');
@@ -258,8 +282,13 @@ function updateCardNextVisibility(c) {
 
 function handleClick(clickedIndex, btnElement) {
   try {
+    console.log('handleClick index=', clickedIndex, 'currentIndex=', currentIndex);
     const current = clues[currentIndex];
     const clicked = clues[clickedIndex];
+    if (!clicked) {
+      console.warn('clicked is undefined for index', clickedIndex);
+      return;
+    }
 
     viewerImg && (viewerImg.src = clicked.media || clicked.photo || clicked.thumb || 'assets/placeholder-large.jpg');
     viewerImg && (viewerImg.alt = clicked.objectName || clicked.title || '');
@@ -315,7 +344,6 @@ function markCompleted(index, btnElement) {
     const btn = btnElement || document.querySelector(`.hotspot[data-index="${index}"]`);
     if (btn) btn.classList.add('completed');
 
-    // добавляем в savedState только если это игровой индекс
     if (gameIndexes.includes(index) && !savedState.completed.includes(index)) {
       savedState.completed.push(index);
     }
@@ -329,7 +357,6 @@ function markCompleted(index, btnElement) {
     if (allDone) {
       savedState.currentIndex = clues.length - 1;
       saveState();
-      // перенаправляем на страницу победы
       window.location.href = 'victory.html';
     }
   } catch (e) {
@@ -338,7 +365,6 @@ function markCompleted(index, btnElement) {
 }
 
 function advanceStep() {
-  // следующий непройденный игровой шаг после currentIndex
   const nextAfter = gameIndexes.find(idx => idx > currentIndex && !savedState.completed.includes(idx));
   if (typeof nextAfter !== 'undefined') {
     currentIndex = nextAfter;
@@ -348,7 +374,6 @@ function advanceStep() {
     return;
   }
 
-  // любой непройденный игровой шаг
   const any = gameIndexes.find(idx => !savedState.completed.includes(idx));
   if (typeof any !== 'undefined') {
     currentIndex = any;
@@ -358,7 +383,6 @@ function advanceStep() {
     return;
   }
 
-  // все пройдены
   savedState.currentIndex = clues.length - 1;
   saveState();
   window.location.href = 'victory.html';
@@ -393,7 +417,6 @@ function escapeHtml(str) {
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-  // Будем пытаться загрузить JSON и инициализировать интерфейс
   loadClues().catch(err => {
     console.error('Unhandled error in loadClues:', err);
     showErrorInUI('Ошибка инициализации', err && err.message ? err.message : String(err));
